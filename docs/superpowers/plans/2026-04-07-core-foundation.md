@@ -13,6 +13,10 @@
 - Real Device Driver (하드웨어 스펙 확정 후)
 - 모바일/웹 UI (플랫폼 확정 후)
 
+> ⚠️ **스펙 변경 (2026-04-07):** 채널 수 8→**4**, 파장 [735,850]→**[780, 850, 950]nm (3파장)**.
+> 영향 받는 태스크: Task 2(RawPacket 크기 4×3=12), Task 5(Simulator 3파장), Task 7(mBLL 3×2 행렬), Task 12(N_CHANNELS=4).
+> `n_wavelengths`는 코드에 하드코딩하지 않고 `config.device.wavelengths_nm`의 길이로 동적 계산한다.
+
 ---
 
 ## Task 0: 개발 환경 세팅

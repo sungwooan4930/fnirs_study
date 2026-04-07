@@ -73,4 +73,26 @@
 
 ---
 
+## 2026-04-07 — 하드웨어 스펙 일부 확정
+
+### 확정된 스펙
+- **채널 수: 4채널** (기존 계획 8채널에서 변경)
+- **측정 파장: 780nm, 850nm, 950nm (3파장)** (기존 계획 2파장에서 변경)
+
+### 미확정 스펙 (계속 대기)
+- 샘플링 레이트, 통신 프로토콜, 채널-소스/디텍터 매핑, SDS
+
+### 코드/문서 반영
+- `config/settings.yaml` — n_channels: 4, wavelengths_nm: [780, 850, 950], 흡광계수 3파장으로 업데이트
+- `docs/superpowers/specs/2026-04-07-pre-development-design.md` — 미결 항목 업데이트
+- `docs/superpowers/plans/2026-04-07-core-foundation.md` — 스펙 변경 공지 추가
+
+### 후속 태스크 영향
+- Task 2: RawPacket.channel_intensities 크기 = 4×3 = 12, n_wavelengths는 config에서 동적 계산
+- Task 5: Simulator 3파장 신호 생성
+- Task 7: mBLL 3×2 행렬 (pseudo-inverse로 과결정계 처리)
+- Task 12: N_CHANNELS = 4
+
+---
+
 <!-- 아래에 날짜 순으로 로그 추가 -->
