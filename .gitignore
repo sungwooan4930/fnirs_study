@@ -4,10 +4,29 @@ __pycache__/
 *.pyo
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 data/
 reports/
 .superpowers/
 *.h5
+*.csv
+*.log
 *.egg-info/
 dist/
 build/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Coverage
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
