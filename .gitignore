@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+data/
+reports/
+.superpowers/
+*.h5
+*.egg-info/
+dist/
+build/
