@@ -1,7 +1,7 @@
 device:
   # 하드웨어 담당자와 확정 필요 — 현재 모두 placeholder
   wavelengths_nm: [735, 850]       # 광원 파장 2개 (nm)
-  sampling_rate_hz: 10             # 샘플링 레이트
+  sampling_rate_hz: 10.0           # 샘플링 레이트
   n_channels: 8                    # 채널 수
   sds_mm: 30.0                     # 소스-디텍터 간격 (mm)
   source_detector_pairs:
