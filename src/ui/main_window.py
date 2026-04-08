@@ -18,7 +18,9 @@ class MainWindow(QMainWindow):
     실시간 HbO/HbR 그래프와 집중도 미터를 업데이트한다.
     """
 
-    PLOT_WINDOW_SEC = 5.0  # 최근 5초만 표시
+    PLOT_WINDOW_SEC = 5.0   # 최근 5초만 표시
+    PLOT_Y_MIN = -5.0       # Y축 고정 하한 (μmol/L)
+    PLOT_Y_MAX = 5.0        # Y축 고정 상한 (μmol/L)
 
     def __init__(self, config: AppConfig) -> None:
         super().__init__()
@@ -65,6 +67,7 @@ class MainWindow(QMainWindow):
             p.setLabel("left", "μmol/L")
             p.setLabel("bottom", "sec")
             p.setXRange(-self.PLOT_WINDOW_SEC, 0, padding=0)
+            p.setYRange(self.PLOT_Y_MIN, self.PLOT_Y_MAX, padding=0)
             p.showGrid(x=True, y=True, alpha=0.3)
             hbo_curve = p.plot(pen=pg.mkPen("r", width=1.5), name="HbO")
             hbr_curve = p.plot(pen=pg.mkPen("b", width=1.5), name="HbR")
