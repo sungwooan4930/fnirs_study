@@ -36,16 +36,12 @@ def main() -> None:
     def on_start() -> None:
         acq_thread.start()
         pipeline.start()
-        window._start_btn.setEnabled(False)
-        window._stop_btn.setEnabled(True)
-        window.statusBar().showMessage("측정 중...")
+        window.start_session()
 
     def on_stop() -> None:
         acq_thread.stop()
         pipeline.stop()
-        window._start_btn.setEnabled(True)
-        window._stop_btn.setEnabled(False)
-        window.statusBar().showMessage("측정 중지됨")
+        window.stop_session()
 
     window._start_btn.clicked.connect(on_start)
     window._stop_btn.clicked.connect(on_stop)

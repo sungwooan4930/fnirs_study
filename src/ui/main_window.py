@@ -89,7 +89,14 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def update_sample(self, sample: ProcessedSample) -> None:
-        """ProcessingPipeline의 on_sample 콜백에서 호출된다."""
+        """ProcessingPipeline의 on_sample 콜백에서 호출된다.
+
+        Args:
+            sample: 처리된 단일 시간점 데이터. concentration_index는 [0.0, 1.0]
+                범위이며 0-100 정수로 스케일하여 CI 바에 표시한다.
+                hbo/hbr 배열의 채널별 최신 값을 슬라이딩 윈도우 버퍼에 추가하고
+                각 채널의 그래프를 갱신한다.
+        """
         ci_pct = int(sample.concentration_index * 100)
         self._ci_bar.setValue(ci_pct)
         self._ci_value_label.setText(f"{ci_pct}%")
@@ -97,8 +104,22 @@ class MainWindow(QMainWindow):
         for ch in range(self._n_channels):
             self._hbo_data[ch].append(float(sample.hbo[ch]))
             self._hbr_data[ch].append(float(sample.hbr[ch]))
+            # HbO와 HbR을 항상 함께 트리밍하여 두 리스트 길이를 동기화한다
             if len(self._hbo_data[ch]) > self._max_points:
                 self._hbo_data[ch] = self._hbo_data[ch][-self._max_points:]
+            if len(self._hbr_data[ch]) > self._max_points:
                 self._hbr_data[ch] = self._hbr_data[ch][-self._max_points:]
             self._hbo_curves[ch].setData(self._hbo_data[ch])
             self._hbr_curves[ch].setData(self._hbr_data[ch])
+
+    def start_session(self) -> None:
+        """측정 세션을 시작한다. start 버튼 비활성화, stop 버튼 활성화."""
+        self._start_btn.setEnabled(False)
+        self._stop_btn.setEnabled(True)
+        self.statusBar().showMessage("측정 중...")
+
+    def stop_session(self) -> None:
+        """측정 세션을 중지한다. start 버튼 활성화, stop 버튼 비활성화."""
+        self._start_btn.setEnabled(True)
+        self._stop_btn.setEnabled(False)
+        self.statusBar().showMessage("측정 중지됨")
