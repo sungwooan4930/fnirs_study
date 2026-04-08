@@ -3,14 +3,20 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QMetaObject, Qt, Q_ARG
+from PySide6.QtCore import QObject, Signal
 from src.core.config import AppConfig
+from src.core.models import ProcessedSample
 from src.core.ring_buffer import RingBuffer
 from src.acquisition.simulator import FNIRSSimulator
 from src.acquisition.acquisition_thread import AcquisitionThread
 from src.processing.concentration import SimpleHbOIndex
 from src.processing.pipeline import ProcessingPipeline
 from src.ui.main_window import MainWindow
+
+
+class _SampleBridge(QObject):
+    """worker 스레드 → GUI 스레드 안전 전달용 Signal 브리지."""
+    sample_ready = Signal(object)
 
 
 def main() -> None:
@@ -20,6 +26,9 @@ def main() -> None:
     app = QApplication(sys.argv)
     window = MainWindow(config)
 
+    bridge = _SampleBridge()
+    bridge.sample_ready.connect(window.update_sample)
+
     buffer = RingBuffer(capacity=1000)
     device = FNIRSSimulator(config)
     acq_thread = AcquisitionThread(device=device, buffer=buffer)
@@ -27,10 +36,7 @@ def main() -> None:
         buffer=buffer,
         config=config,
         concentration_index=SimpleHbOIndex(),
-        on_sample=lambda s: QMetaObject.invokeMethod(
-            window, "update_sample", Qt.ConnectionType.QueuedConnection,
-            Q_ARG(object, s),
-        ),
+        on_sample=bridge.sample_ready.emit,
     )
 
     def on_start() -> None:
