@@ -17,9 +17,9 @@ class AcquisitionThread(threading.Thread):
         self._stop_event = threading.Event()
 
     def run(self) -> None:
-        self._device.connect()
-        self._device.start_stream()
         try:
+            self._device.connect()
+            self._device.start_stream()
             while not self._stop_event.is_set():
                 packet = self._device.read_packet()
                 self._buffer.put(packet)
