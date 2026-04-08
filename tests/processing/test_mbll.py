@@ -3,6 +3,8 @@
 Spec: 4 channels, 3 wavelengths [780, 850, 950] nm.
 """
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -102,6 +104,16 @@ class TestInputValidation:
         with pytest.raises(ValueError):
             modified_beer_lambert(raw, WAVELENGTHS, EXT_HBO, EXT_HBR, DPF, SDS_MM)
 
+    def test_sds_mm_zero_raises(self):
+        raw = np.ones((4, 3, 100))
+        with pytest.raises(ValueError):
+            modified_beer_lambert(raw, WAVELENGTHS, EXT_HBO, EXT_HBR, DPF, sds_mm=0)
+
+    def test_sds_mm_negative_raises(self):
+        raw = np.ones((4, 3, 100))
+        with pytest.raises(ValueError):
+            modified_beer_lambert(raw, WAVELENGTHS, EXT_HBO, EXT_HBR, DPF, sds_mm=-5.0)
+
 
 class TestZeroValueGuard:
     """Test 5: zero values in raw_intensity don't crash (division by zero guard)."""
@@ -110,20 +122,29 @@ class TestZeroValueGuard:
         raw = np.ones((4, 3, 100))
         raw[:, :, 0] = 0.0  # zero baseline (I0)
         # Should not raise ZeroDivisionError or produce NaN/Inf that crashes
-        hbo, hbr = modified_beer_lambert(raw, WAVELENGTHS, EXT_HBO, EXT_HBR, DPF, SDS_MM)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            hbo, hbr = modified_beer_lambert(raw, WAVELENGTHS, EXT_HBO, EXT_HBR, DPF, SDS_MM)
+            assert any("zeros" in str(warning.message).lower() for warning in w)
         assert hbo.shape == (4, 100)
         assert hbr.shape == (4, 100)
 
     def test_zero_signal_samples_does_not_crash(self):
         raw = np.ones((4, 3, 100))
         raw[:, :, 50] = 0.0  # zero at mid-signal
-        hbo, hbr = modified_beer_lambert(raw, WAVELENGTHS, EXT_HBO, EXT_HBR, DPF, SDS_MM)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            hbo, hbr = modified_beer_lambert(raw, WAVELENGTHS, EXT_HBO, EXT_HBR, DPF, SDS_MM)
+            assert any("zeros" in str(warning.message).lower() for warning in w)
         assert hbo.shape == (4, 100)
         assert hbr.shape == (4, 100)
 
     def test_all_zeros_does_not_crash(self):
         raw = np.zeros((4, 3, 100))
-        hbo, hbr = modified_beer_lambert(raw, WAVELENGTHS, EXT_HBO, EXT_HBR, DPF, SDS_MM)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            hbo, hbr = modified_beer_lambert(raw, WAVELENGTHS, EXT_HBO, EXT_HBR, DPF, SDS_MM)
+            assert any("zeros" in str(warning.message).lower() for warning in w)
         assert hbo.shape == (4, 100)
         assert hbr.shape == (4, 100)
 
