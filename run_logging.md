@@ -96,3 +96,35 @@
 ---
 
 <!-- 아래에 날짜 순으로 로그 추가 -->
+
+---
+
+## 2026-04-08 — Core Foundation Task 7~12 구현 완료
+
+### 완료된 태스크
+
+| 태스크 | 내용 | 테스트 |
+|--------|------|--------|
+| Task 7 | mBLL (수정된 Beer-Lambert Law) — 3파장 pseudo-inverse (np.linalg.pinv), np.einsum 벡터화 | 18개 |
+| Task 8 | ConcentrationIndex 플러그인 — ABC + SimpleHbOIndex | 7개 |
+| Task 9 | AcquisitionThread — threading.Thread, daemon=True, try/finally 보장 | 4개 |
+| Task 10 | ProcessingPipeline — 슬라이딩 윈도우, bandpass + mBLL + CI | 3개 |
+| Task 11 | SessionStore — HDF5 저장/로드 (h5py), n_wavelengths 속성 저장 | 5개 |
+| Task 12 | PySide6 MainWindow — 4채널 실시간 그래프, 집중도 미터, start/stop 공개 메서드 | 4개 |
+
+**총 73개 테스트 — 전부 통과**
+
+### 주요 버그 수정 및 결정 사항
+- **PySide6 6.11.0 DLL 오류**: 6.7.3으로 다운그레이드 (requirements.txt 반영 필요)
+- **bandpass order=6**: sosfiltfilt 이중 적용으로 실효 차수 12 (0.01-0.5 Hz fNIRS 대역)
+- **ProcessingPipeline padlen 대응**: `filter_min=40` (order=6 + sosfiltfilt padlen=39 초과)
+- **평균 오프셋 복원**: 필터 후 강도가 0 근처로 떨어져 mBLL NaN 발생 → 필터 전 평균 복원
+- **mBLL 경고**: raw_intensity에 0 포함 시 UserWarning 발행
+- **n_wavelengths 저장**: HDF5 /raw 그룹 속성으로 저장, 로드 시 복원
+
+### 최종 코드 리뷰 — READY TO MERGE
+다음 마일스톤에서 수정할 항목:
+1. AcquisitionThread/ProcessingPipeline 오류 콜백 추가 (현재 daemon 스레드 오류 묵살)
+2. main.py에서 `window._start_btn` 직접 접근 제거 → MainWindow.connect_start/stop() 또는 Signal로 교체
+3. SessionStore `__enter__`/`__exit__` 컨텍스트 매니저 추가
+4. main.py에 SessionStore 연동 (현재 실행 중 디스크 저장 미구현)
