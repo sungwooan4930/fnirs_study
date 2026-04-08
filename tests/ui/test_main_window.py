@@ -39,6 +39,15 @@ simulator:
     return AppConfig.from_yaml(f)
 
 
+def _make_sample(timestamp=1.0, ci=0.5):
+    return ProcessedSample(
+        timestamp=timestamp,
+        hbo=np.array([0.5, 0.3, 0.1, 0.4]),
+        hbr=np.array([-0.1, -0.05, 0.0, -0.2]),
+        concentration_index=ci,
+    )
+
+
 def test_main_window_opens(qtbot, config):
     window = MainWindow(config)
     qtbot.addWidget(window)
@@ -61,27 +70,33 @@ def test_update_sample_updates_ci_bar(qtbot, config):
 
 
 def test_update_sample_appends_plot_data(qtbot, config):
-    """update_sample 호출 시 각 채널의 plot data가 추가된다."""
+    """update_sample 호출 시 각 채널의 plot data가 TimeSeriesWidget에 추가된다."""
     window = MainWindow(config)
     qtbot.addWidget(window)
-    sample = ProcessedSample(
-        timestamp=1.0,
-        hbo=np.array([0.5, 0.3, 0.1, 0.4]),
-        hbr=np.array([-0.1, -0.05, 0.0, -0.2]),
-        concentration_index=0.5,
-    )
-    window.update_sample(sample)
-    assert len(window._hbo_data[0]) == 1
-    assert len(window._hbr_data[3]) == 1
-    assert len(window._time_axis) == 1
+    window.update_sample(_make_sample(timestamp=1.0))
+    ts = window._time_series
+    assert len(ts._hbo_data[0]) == 1
+    assert len(ts._hbr_data[3]) == 1
+    assert len(ts._time_axis) == 1
+
+
+def test_n_channels_from_config(qtbot, config):
+    """채널 수는 config에서 읽어야 한다."""
+    window = MainWindow(config)
+    qtbot.addWidget(window)
+    assert window._n_channels == 4
+    ts = window._time_series
+    assert len(ts._hbo_curves) == 4
+    assert len(ts._hbr_curves) == 4
 
 
 def test_sliding_window_trims_to_max_points(qtbot, config):
     """max_points 초과 시 가장 오래된 샘플이 제거된다 (최근 5초만 유지)."""
     window = MainWindow(config)
     qtbot.addWidget(window)
+    ts = window._time_series
     # sampling_rate=10, PLOT_WINDOW_SEC=5 → max_points=50
-    max_pts = window._max_points
+    max_pts = ts._max_points
     for i in range(max_pts + 10):
         s = ProcessedSample(
             timestamp=float(i) / 10.0,
@@ -90,14 +105,15 @@ def test_sliding_window_trims_to_max_points(qtbot, config):
             concentration_index=0.5,
         )
         window.update_sample(s)
-    assert len(window._hbo_data[0]) == max_pts
-    assert len(window._time_axis) == max_pts
+    assert len(ts._hbo_data[0]) == max_pts
+    assert len(ts._time_axis) == max_pts
 
 
 def test_time_axis_latest_is_zero(qtbot, config):
     """x축에서 가장 최근 포인트는 t=0이어야 한다."""
     window = MainWindow(config)
     qtbot.addWidget(window)
+    ts = window._time_series
     for i in range(5):
         s = ProcessedSample(
             timestamp=float(i),
@@ -106,16 +122,33 @@ def test_time_axis_latest_is_zero(qtbot, config):
             concentration_index=0.5,
         )
         window.update_sample(s)
-    t0 = window._time_axis[-1]
-    x = [t - t0 for t in window._time_axis]
+    t0 = ts._time_axis[-1]
+    x = [t - t0 for t in ts._time_axis]
     assert x[-1] == 0.0
     assert x[0] < 0.0
 
 
-def test_n_channels_from_config(qtbot, config):
-    """채널 수는 config에서 읽어야 한다."""
+def test_calibration_tab_is_default(qtbot, config):
+    """초기 탭은 Calibration (index 0)이어야 한다."""
     window = MainWindow(config)
     qtbot.addWidget(window)
-    assert window._n_channels == 4
-    assert len(window._hbo_curves) == 4
-    assert len(window._hbr_curves) == 4
+    assert window._tabs.currentIndex() == 0
+
+
+def test_monitoring_tabs_disabled_before_calibration(qtbot, config):
+    """캘리브레이션 완료 전에는 3D Brain(1)과 Time Series(2) 탭이 비활성화된다."""
+    window = MainWindow(config)
+    qtbot.addWidget(window)
+    assert not window._tabs.isTabEnabled(1)
+    assert not window._tabs.isTabEnabled(2)
+
+
+def test_calibration_done_enables_tabs(qtbot, config):
+    """calibration_done 시그널 발생 시 모니터링 탭이 활성화되고 Time Series로 이동한다."""
+    window = MainWindow(config)
+    qtbot.addWidget(window)
+    # 시그널 직접 발생
+    window._calibration.calibration_done.emit()
+    assert window._tabs.isTabEnabled(1)
+    assert window._tabs.isTabEnabled(2)
+    assert window._tabs.currentIndex() == 2
