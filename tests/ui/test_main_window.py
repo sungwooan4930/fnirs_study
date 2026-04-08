@@ -73,6 +73,43 @@ def test_update_sample_appends_plot_data(qtbot, config):
     window.update_sample(sample)
     assert len(window._hbo_data[0]) == 1
     assert len(window._hbr_data[3]) == 1
+    assert len(window._time_axis) == 1
+
+
+def test_sliding_window_trims_to_max_points(qtbot, config):
+    """max_points 초과 시 가장 오래된 샘플이 제거된다 (최근 5초만 유지)."""
+    window = MainWindow(config)
+    qtbot.addWidget(window)
+    # sampling_rate=10, PLOT_WINDOW_SEC=5 → max_points=50
+    max_pts = window._max_points
+    for i in range(max_pts + 10):
+        s = ProcessedSample(
+            timestamp=float(i) / 10.0,
+            hbo=np.array([0.1] * 4),
+            hbr=np.array([-0.1] * 4),
+            concentration_index=0.5,
+        )
+        window.update_sample(s)
+    assert len(window._hbo_data[0]) == max_pts
+    assert len(window._time_axis) == max_pts
+
+
+def test_time_axis_latest_is_zero(qtbot, config):
+    """x축에서 가장 최근 포인트는 t=0이어야 한다."""
+    window = MainWindow(config)
+    qtbot.addWidget(window)
+    for i in range(5):
+        s = ProcessedSample(
+            timestamp=float(i),
+            hbo=np.array([0.1] * 4),
+            hbr=np.array([-0.1] * 4),
+            concentration_index=0.5,
+        )
+        window.update_sample(s)
+    t0 = window._time_axis[-1]
+    x = [t - t0 for t in window._time_axis]
+    assert x[-1] == 0.0
+    assert x[0] < 0.0
 
 
 def test_n_channels_from_config(qtbot, config):

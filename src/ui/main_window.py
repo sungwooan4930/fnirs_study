@@ -18,14 +18,14 @@ class MainWindow(QMainWindow):
     실시간 HbO/HbR 그래프와 집중도 미터를 업데이트한다.
     """
 
-    PLOT_WINDOW_SEC = 30.0
+    PLOT_WINDOW_SEC = 5.0  # 최근 5초만 표시
 
     def __init__(self, config: AppConfig) -> None:
         super().__init__()
         self._config = config
         self._n_channels = config.device.n_channels  # NEVER hardcode
         self._sr = config.device.sampling_rate_hz
-        self._max_points = int(self.PLOT_WINDOW_SEC * self._sr)
+        self._max_points = max(int(self.PLOT_WINDOW_SEC * self._sr), 2)
 
         self.setWindowTitle("fNIRS 집중도 모니터")
         self.resize(1200, 800)
@@ -63,6 +63,8 @@ class MainWindow(QMainWindow):
             p = self._plot_widget.addPlot(row=ch // cols, col=ch % cols)
             p.setTitle(f"Ch {ch + 1}", size="10pt")
             p.setLabel("left", "μmol/L")
+            p.setLabel("bottom", "sec")
+            p.setXRange(-self.PLOT_WINDOW_SEC, 0, padding=0)
             p.showGrid(x=True, y=True, alpha=0.3)
             hbo_curve = p.plot(pen=pg.mkPen("r", width=1.5), name="HbO")
             hbr_curve = p.plot(pen=pg.mkPen("b", width=1.5), name="HbR")
@@ -86,6 +88,8 @@ class MainWindow(QMainWindow):
     def _init_plot_data(self) -> None:
         self._hbo_data: list[list[float]] = [[] for _ in range(self._n_channels)]
         self._hbr_data: list[list[float]] = [[] for _ in range(self._n_channels)]
+        # x축: 최근 N포인트를 -PLOT_WINDOW_SEC ~ 0 (초) 로 표시
+        self._time_axis: list[float] = []
 
     @Slot(object)
     def update_sample(self, sample: ProcessedSample) -> None:
@@ -94,12 +98,19 @@ class MainWindow(QMainWindow):
         Args:
             sample: 처리된 단일 시간점 데이터. concentration_index는 [0.0, 1.0]
                 범위이며 0-100 정수로 스케일하여 CI 바에 표시한다.
-                hbo/hbr 배열의 채널별 최신 값을 슬라이딩 윈도우 버퍼에 추가하고
-                각 채널의 그래프를 갱신한다.
+                hbo/hbr 배열의 채널별 최신 값을 슬라이딩 윈도우(최근 5초)에
+                추가하고 x축을 상대 시간(초)으로 갱신한다.
         """
         ci_pct = int(sample.concentration_index * 100)
         self._ci_bar.setValue(ci_pct)
         self._ci_value_label.setText(f"{ci_pct}%")
+
+        # 시간축 업데이트: 최신 포인트가 t=0, 과거가 음수
+        self._time_axis.append(sample.timestamp)
+        if len(self._time_axis) > self._max_points:
+            self._time_axis = self._time_axis[-self._max_points:]
+        t0 = self._time_axis[-1]
+        x = [t - t0 for t in self._time_axis]  # 상대 시간 (0이 현재)
 
         for ch in range(self._n_channels):
             self._hbo_data[ch].append(float(sample.hbo[ch]))
@@ -109,8 +120,8 @@ class MainWindow(QMainWindow):
                 self._hbo_data[ch] = self._hbo_data[ch][-self._max_points:]
             if len(self._hbr_data[ch]) > self._max_points:
                 self._hbr_data[ch] = self._hbr_data[ch][-self._max_points:]
-            self._hbo_curves[ch].setData(self._hbo_data[ch])
-            self._hbr_curves[ch].setData(self._hbr_data[ch])
+            self._hbo_curves[ch].setData(x, self._hbo_data[ch])
+            self._hbr_curves[ch].setData(x, self._hbr_data[ch])
 
     def start_session(self) -> None:
         """측정 세션을 시작한다. start 버튼 비활성화, stop 버튼 활성화."""
