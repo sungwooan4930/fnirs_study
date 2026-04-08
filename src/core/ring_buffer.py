@@ -8,6 +8,8 @@ class RingBuffer:
     """thread-safe FIFO 버퍼. capacity 초과 시 가장 오래된 항목을 버린다."""
 
     def __init__(self, capacity: int) -> None:
+        if capacity <= 0:
+            raise ValueError(f"capacity must be positive, got {capacity}")
         self._capacity = capacity
         self._queue: queue.Queue[RawPacket] = queue.Queue(maxsize=capacity)
 
