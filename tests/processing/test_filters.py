@@ -46,3 +46,15 @@ def test_filters_work_on_2d_array():
     signals = np.stack([np.sin(2 * np.pi * 0.1 * t) for _ in range(4)])  # (4, 1000)
     filtered = bandpass_filter(signals, low_hz=0.01, high_hz=0.5, sampling_rate_hz=sr)
     assert filtered.shape == signals.shape
+
+
+def test_bandpass_raises_on_invalid_frequencies():
+    with pytest.raises(ValueError, match="low_hz"):
+        bandpass_filter(np.ones(100), low_hz=0.0, high_hz=0.5, sampling_rate_hz=100.0)
+    with pytest.raises(ValueError):
+        bandpass_filter(np.ones(100), low_hz=0.5, high_hz=0.1, sampling_rate_hz=100.0)
+
+
+def test_baseline_correct_raises_on_zero_baseline():
+    with pytest.raises(ValueError, match="baseline"):
+        baseline_correct(np.ones(100), baseline_sec=0.001, sampling_rate_hz=10.0)
