@@ -49,3 +49,22 @@ def test_processed_sample_validates_channel_count():
             hbr=np.zeros(4),
             concentration_index=0.0,
         )
+
+
+def test_raw_packet_validates_intensity_length():
+    with pytest.raises(ValueError, match="divisible"):
+        RawPacket(
+            timestamp=0.0,
+            channel_intensities=[0.1, 0.2, 0.3, 0.4, 0.5],  # 5 is not divisible by 3
+            n_wavelengths=3,
+        )
+
+
+def test_raw_packet_intensity_by_channel_out_of_range():
+    packet = RawPacket(
+        timestamp=0.0,
+        channel_intensities=[0.1, 0.2, 0.3] * 4,  # 4 channels × 3 wavelengths
+        n_wavelengths=3,
+    )
+    with pytest.raises(IndexError):
+        packet.intensity_by_channel(channel=4)  # valid range is 0-3
