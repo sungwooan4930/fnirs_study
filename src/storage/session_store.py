@@ -58,13 +58,18 @@ class SessionStore:
         """저장된 RawPacket 목록을 반환한다."""
         with h5py.File(self._path, "r") as f:
             grp = f["raw"]
-            n_wavelengths = int(grp.attrs.get("n_wavelengths", 3))
+            if "n_wavelengths" not in grp.attrs:
+                raise ValueError(
+                    "HDF5 raw group is missing 'n_wavelengths' attribute. "
+                    "The file may be corrupted or written by an incompatible version."
+                )
+            n_wavelengths = int(grp.attrs["n_wavelengths"])
             timestamps = grp["timestamps"][:]
             intensities = grp["intensities"][:]
         return [
             RawPacket(
                 timestamp=float(timestamps[i]),
-                channel_intensities=list(intensities[i]),
+                channel_intensities=[float(v) for v in intensities[i]],
                 n_wavelengths=n_wavelengths,
             )
             for i in range(len(timestamps))
