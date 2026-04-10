@@ -32,17 +32,38 @@
 
 ---
 
-## 기술 스택 (예정)
+## 기술 스택
+
+### 웹 프론트엔드 (현재 개발 방향)
+
+| 분류 | 도구/라이브러리 | 비고 |
+|------|----------------|------|
+| UI 프레임워크 | React + Vite | 컴포넌트 기반 실시간 UI |
+| 언어 | JavaScript (ES Modules) | TypeScript 추후 고려 |
+| BLE 연결 | Web Bluetooth API | Chrome/Edge 전용 |
+| 신호처리 | JS 재구현 (Web Worker) | Python 로직 포팅 |
+| 뇌 맵 렌더링 | Canvas 2D | RBF 보간, BWR 컬러맵 |
+| 시계열 그래프 | Canvas 2D | 5초 슬라이딩 윈도우 |
+| 데이터 저장 | 클라이언트 로컬 | CSV 파일 다운로드 |
+| 배포 | 정적 호스팅 (GitHub Pages 등) | 프로토타입은 로컬 |
+
+### Python 백엔드 (참조용 / Core Library)
 
 | 분류 | 도구/라이브러리 |
 |------|----------------|
-| 언어 | Python 3.10+ |
-| 데이터 수집 | pyserial / 커스텀 드라이버 |
-| 신호 처리 | NumPy, SciPy, MNE-NIRS |
-| 실시간 시각화 | PyQtGraph 또는 Matplotlib (animation) |
-| GUI 프레임워크 | PyQt5 / PySide6 |
-| 레포트 생성 | ReportLab (PDF) 또는 Jinja2+HTML |
-| 데이터 저장 | HDF5 (h5py) 또는 CSV |
+| 언어 | Python 3.11+ |
+| 신호 처리 | NumPy, SciPy |
+| 데이터 저장 | HDF5 (h5py) |
+| 시뮬레이터 | FNIRSSimulator (HAL 패턴) |
+| 테스트 | pytest, pytest-qt |
+| 프로토타입 UI | PySide6 + PyQtGraph (참조용 유지) |
+
+### 플랫폼 전환 결정 (2026-04-10)
+- **이전**: PySide6 데스크톱 앱
+- **현재**: React 웹 서비스
+- **이유**: 고객 요청 — 기기 종류 무관 브라우저 접속
+- **제약**: Web Bluetooth = Chrome/Edge만 지원, iOS는 Bluefy 앱 필요
+- **전략**: Chrome 타겟 프로토타입 완성 → 고객 데모 → iOS 지원 협의
 
 ---
 
@@ -111,6 +132,49 @@ D:/Study_fNIRS/
 
 ## 주요 참고 사항
 
-- fNIRS 채널: 8채널, 전전두엽(Fp1, Fp2, AF3, AF4 인근) 배치 예상
-- 샘플링 레이트: 장치 스펙 확인 후 확정
-- 집중도 지수: HbO 증가 + HbR 감소 패턴 기반, 추후 알고리즘 상세 정의
+- **fNIRS 채널**: 4채널, 전전두엽(PFC) 배치
+- **측정 파장**: 780nm, 850nm, 950nm (3파장)
+- **하드웨어 연결**: BLE 고정
+- **샘플링 레이트**: 장치 스펙 확인 후 확정
+- **집중도 지수**: HbO 증가 + HbR 감소 패턴 기반, SimpleHbOIndex 구현됨
+
+---
+
+## 웹 서비스 디렉토리 구조 (계획)
+
+```
+D:/Study_fNIRS/
+├── PROJECT_GUIDELINES.md
+├── run_logging.md
+├── src/                        # Python Core Library (참조용)
+│   ├── acquisition/
+│   ├── processing/
+│   ├── storage/
+│   ├── core/
+│   └── ui/                     # PySide6 프로토타입 (참조용)
+├── web/                        # React 웹 서비스 (신규)
+│   ├── index.html
+│   ├── package.json
+│   └── src/
+│       ├── main.jsx
+│       ├── App.jsx
+│       ├── hooks/
+│       │   ├── useBLE.js
+│       │   └── usePipeline.js
+│       ├── workers/
+│       │   └── pipeline.worker.js
+│       ├── components/
+│       │   ├── CalibrationTab.jsx
+│       │   ├── BrainMapTab.jsx
+│       │   └── TimeSeriesTab.jsx
+│       └── lib/
+│           ├── mbll.js
+│           ├── filters.js
+│           └── rbf.js
+├── config/
+│   └── settings.yaml
+├── docs/
+│   └── superpowers/
+│       ├── specs/
+│       └── plans/
+└── tests/                      # Python 테스트 (78개 통과)

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pathlib import Path
 import numpy as np
 from scipy.interpolate import RBFInterpolator
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton
@@ -7,6 +8,9 @@ from PySide6.QtGui import (
     QPainter, QPen, QBrush, QColor, QFont,
     QImage, QPixmap, QLinearGradient, QRadialGradient,
 )
+
+_ASSET_DIR = Path(__file__).parent.parent / "assets"
+_BRAIN_IMG_PATH = _ASSET_DIR / "brain_top.png"
 
 
 class _BrainCanvas(QWidget):
@@ -58,6 +62,7 @@ class _BrainCanvas(QWidget):
         pm.fill(QColor("#000000"))
         p = QPainter(pm)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
         bx = int(w * self._BX)
         by = int(h * self._BY)
@@ -66,59 +71,63 @@ class _BrainCanvas(QWidget):
         cxp = bx + bw // 2
         cyp = by + bh // 2
 
-        # 뇌 외곽 (방사형 그라디언트 회색)
-        rg = QRadialGradient(cxp, cyp, max(bw, bh) // 2)
-        rg.setColorAt(0.0,  QColor("#484848"))
-        rg.setColorAt(0.55, QColor("#383838"))
-        rg.setColorAt(0.85, QColor("#252525"))
-        rg.setColorAt(1.0,  QColor("#141414"))
-        p.setPen(QPen(QColor("#606060"), 2))
-        p.setBrush(QBrush(rg))
-        p.drawEllipse(bx, by, bw, bh)
+        # ── 실제 뇌 이미지 로드 ───────────────────────────────────────────────
+        brain_loaded = False
+        if _BRAIN_IMG_PATH.exists():
+            brain_pm = QPixmap(str(_BRAIN_IMG_PATH))
+            if not brain_pm.isNull():
+                # RGBA 이미지를 뇌 영역(bx,by,bw,bh)에 맞게 스케일
+                scaled_brain = brain_pm.scaled(
+                    bw, bh,
+                    Qt.AspectRatioMode.IgnoreAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                p.drawPixmap(bx, by, scaled_brain)
+                brain_loaded = True
 
-        # 전전두엽 영역 파란 틴트
+        if not brain_loaded:
+            # 폴백: 프로그래밍 방식 뇌 배경
+            rg = QRadialGradient(cxp, cyp, max(bw, bh) // 2)
+            rg.setColorAt(0.0,  QColor("#484848"))
+            rg.setColorAt(0.55, QColor("#383838"))
+            rg.setColorAt(0.85, QColor("#252525"))
+            rg.setColorAt(1.0,  QColor("#141414"))
+            p.setPen(QPen(QColor("#606060"), 2))
+            p.setBrush(QBrush(rg))
+            p.drawEllipse(bx, by, bw, bh)
+
+        # ── 전전두엽 영역 파란 틴트 오버레이 ─────────────────────────────────
         pfc_h = int(bh * self._PFC_Y_MAX)
         pg2 = QLinearGradient(bx, by, bx, by + pfc_h)
-        pg2.setColorAt(0.0, QColor(40, 60, 120, 65))
-        pg2.setColorAt(1.0, QColor(40, 60, 120, 0))
+        pg2.setColorAt(0.0, QColor(40, 60, 140, 45))
+        pg2.setColorAt(1.0, QColor(40, 60, 140, 0))
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(pg2))
         p.drawEllipse(bx, by, bw, bh)
 
-        # 대뇌종렬 (중앙 세로선)
-        p.setPen(QPen(QColor("#1e1e1e"), 3))
-        p.drawLine(cxp, by + 12, cxp, by + bh - 12)
-
-        # 고랑(sulci) — 단순 호선
-        p.setPen(QPen(QColor("#303030"), 1))
-        sulci = [
-            (0.28, 0.34, 160),
-            (0.40, 0.36, 150),
-            (0.53, 0.30, 140),
-        ]
-        for yf, wf, deg in sulci:
-            yp = by + int(bh * yf)
-            ww = int(bw * wf)
-            p.drawArc(cxp - int(bw * 0.18) - ww // 2, yp - 7, ww, 14, 0, deg * 16)
-            p.drawArc(cxp + int(bw * 0.18) - ww // 2, yp - 7, ww, 14, 0, deg * 16)
-
-        # 채널 위치 마커
+        # ── 채널 위치 마커 ────────────────────────────────────────────────────
         for ch in range(min(self._n_channels, len(self._CH_POS))):
             fx, fy = self._CH_POS[ch]
             cx_ch = bx + int(fx * bw)
             cy_ch = by + int(fy * bh)
+            # 외곽 링 (선명하게)
             p.setPen(QPen(QColor("#ffffff"), 1))
-            p.setBrush(QBrush(QColor(255, 255, 255, 80)))
-            p.drawEllipse(cx_ch - 5, cy_ch - 5, 10, 10)
-            p.setPen(QColor("#dddddd"))
+            p.setBrush(QBrush(QColor(255, 255, 255, 60)))
+            p.drawEllipse(cx_ch - 6, cy_ch - 6, 12, 12)
+            # 중심 점
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QBrush(QColor(255, 220, 80, 200)))
+            p.drawEllipse(cx_ch - 3, cy_ch - 3, 6, 6)
+            # 채널 레이블
+            p.setPen(QColor("#eeeeee"))
             p.setFont(QFont("Arial", 8, QFont.Weight.Bold))
-            p.drawText(cx_ch - 20, cy_ch - 19, 40, 14,
+            p.drawText(cx_ch - 20, cy_ch - 20, 40, 14,
                        Qt.AlignmentFlag.AlignCenter, f"Ch{ch + 1}")
 
-        # 레이블
-        p.setPen(QColor("#777777"))
+        # ── 방향 레이블 ────────────────────────────────────────────────────────
+        p.setPen(QColor("#888888"))
         p.setFont(QFont("Arial", 9))
-        p.drawText(0, by - 20, w, 18, Qt.AlignmentFlag.AlignCenter,
+        p.drawText(0, by - 22, w, 18, Qt.AlignmentFlag.AlignCenter,
                    "\u25b2  Anterior  (Prefrontal Cortex)")
         p.drawText(0, by + bh + 4, w, 18, Qt.AlignmentFlag.AlignCenter,
                    "\u25bc  Posterior")

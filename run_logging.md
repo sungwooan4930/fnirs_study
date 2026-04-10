@@ -128,3 +128,63 @@
 2. main.py에서 `window._start_btn` 직접 접근 제거 → MainWindow.connect_start/stop() 또는 Signal로 교체
 3. SessionStore `__enter__`/`__exit__` 컨텍스트 매니저 추가
 4. main.py에 SessionStore 연동 (현재 실행 중 디스크 저장 미구현)
+
+---
+
+## 2026-04-09 — PySide6 GUI 개선 (UI 마일스톤)
+
+### 완료
+- **원클릭 실행**: `run.bat` 생성 — venv 자동 생성, 패키지 설치, PYTHONPATH 설정, 앱 실행
+- **Cross-thread 버그 수정**: `Q_ARG(object, ...)` → `Signal(object)` 브리지 패턴으로 교체
+- **실시간 그래프 개선**: 누적 표시 → 최근 5초 슬라이딩 윈도우, x축 상대 시간(초)
+- **Y축 고정 스케일**: -5 ~ +5 μmol/L 고정
+- **GUI 전면 재설계** (다크 테마 + 탭 구조):
+  - 탭 1: Calibration — SNR 3파장 바 차트, 채널 상태 판정, "진행 ▶" 버튼
+  - 탭 2: 3D Brain Map — RBF 보간, Blue↔White↔Red 컬러맵, HbO/HbR 토글
+  - 탭 3: Time Series — 채널별 실시간 그래프
+  - 실행 시 Calibration 탭 기본, 완료 후 나머지 탭 활성화
+- **3D Brain Map 배경**: nilearn 대신 matplotlib+PIL로 실제 뇌 형태 이미지 생성
+  - `src/ui/assets/generate_brain.py` — 다층 노이즈 기반 회백질 질감, 7종 해부학적 고랑
+  - `src/ui/assets/brain_top.png` — 600×600 RGBA PNG
+
+### 주요 결정 사항
+- PySide6 버전: 6.7.0 유지 (6.11.0 DLL 로드 오류)
+- `matplotlib`, `Pillow` requirements.txt에 추가
+- 총 테스트: **78개 전부 통과**
+
+---
+
+## 2026-04-10 — 플랫폼 전환 결정: 웹 서비스
+
+### 배경
+고객 요청: 플랫폼(기기 종류) 무관하게 웹 브라우저로 접속 가능한 서비스
+
+### 브레인스토밍 주요 결정 사항
+
+| 항목 | 결정 |
+|------|------|
+| 플랫폼 | 웹 서비스 (브라우저 기반) |
+| 하드웨어 연결 | BLE 고정 |
+| 신호처리 위치 | JavaScript 재구현 (Web Worker) |
+| 프론트엔드 | React + Vite |
+| 빌드 도구 | Vite |
+| 데이터 저장 | 클라이언트 전용 (CSV 다운로드) |
+| 배포 | 로컬 개발 우선, 이후 정적 호스팅 |
+| 프로토타입 타겟 | Chrome/Edge (Web Bluetooth API) |
+
+### 기술적 제약 및 결정
+- **Web Bluetooth API**: Chrome/Edge만 지원, Firefox/Safari 미지원
+- **iOS Safari 미지원**: Bluefy 앱으로 우회 (단기), React Native 전환 (장기 고려)
+- **순수 웹 + BLE 모순**: 브라우저 직접 BLE 연결은 Chromium 계열만 가능
+  → 프로토타입은 Chrome 타겟으로 먼저 완성, 고객 데모 후 협의
+- **Python 코드 자산**: 신호처리 로직(mbll.py, filters.py, pipeline.py)을 JS로 재구현
+
+### PySide6 Qt 앱 상태
+- Core 라이브러리(신호처리, HDF5 저장)는 웹 전환 후에도 참조용으로 유지
+- UI 레이어(src/ui/)는 웹 버전으로 대체 예정
+
+### 다음 단계
+- [ ] 웹 서비스 스펙 문서 작성 (brainstorming 완료 후)
+- [ ] Excalidraw로 화면 구성 와이어프레임
+- [ ] v0.dev로 React 컴포넌트 초안 생성
+- [ ] React 프로젝트 구조 생성 (web/ 디렉토리)
