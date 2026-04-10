@@ -1,0 +1,87 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.app-title {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--accent);
+  margin-right: auto;
+}
+
+.ble-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ble-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.ble-label { font-size: 0.85rem; color: var(--text-muted); }
+
+.btn-connect, .btn-disconnect {
+  padding: 4px 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.btn-connect { background: var(--accent); color: #fff; }
+.btn-connect:hover { background: var(--accent-hover); }
+.btn-disconnect { background: var(--error); color: #fff; }
+
+.ci-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ci-label { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); }
+
+.ci-bar-track {
+  width: 120px;
+  height: 10px;
+  background: var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.ci-bar-fill {
+  height: 100%;
+  background: linear-gradient(to right, #4a90d9, #e57373);
+  border-radius: 5px;
+  transition: width 0.2s;
+}
+
+.ci-value { font-size: 0.85rem; font-weight: 700; min-width: 36px; }
+
+.btn-download {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.btn-download:hover:not(:disabled) { background: var(--border); color: var(--text); }
+.btn-download:disabled { opacity: 0.35; cursor: not-allowed; }
+
+@media (max-width: 768px) {
+  .topbar { padding: 6px 10px; gap: 10px; }
+  .ci-bar-track { width: 70px; }
+}

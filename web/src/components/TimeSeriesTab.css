@@ -1,0 +1,22 @@
+.timeseries {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.ts-legend {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.ts-scale { margin-left: auto; color: var(--text-muted); font-size: 0.8rem; }
+
+.ts-canvas {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}

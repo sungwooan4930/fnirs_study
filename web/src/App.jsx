@@ -1,5 +1,9 @@
 import { useState } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
+import TopBar from './components/TopBar'
+import CalibrationTab from './components/CalibrationTab'
+import TimeSeriesTab from './components/TimeSeriesTab'
+import BrainMapTab from './components/BrainMapTab'
 import './App.css'
 
 function TabContainer() {
@@ -33,9 +37,9 @@ function TabContainer() {
         </button>
       </nav>
       <main className="tab-content">
-        {activeTab === 'calibration' && <div className="placeholder">Calibration Tab</div>}
-        {activeTab === 'brainmap' && <div className="placeholder">Brain Map Tab</div>}
-        {activeTab === 'timeseries' && <div className="placeholder">Time Series Tab</div>}
+        {activeTab === 'calibration' && <CalibrationTab />}
+        {activeTab === 'brainmap' && <BrainMapTab />}
+        {activeTab === 'timeseries' && <TimeSeriesTab />}
       </main>
     </>
   )
@@ -45,9 +49,7 @@ export default function App() {
   return (
     <AppProvider>
       <div className="app">
-        <header className="topbar">
-          <span className="app-title">fNIRS Monitor</span>
-        </header>
+        <TopBar />
         <TabContainer />
       </div>
     </AppProvider>

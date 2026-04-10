@@ -1,0 +1,50 @@
+.brainmap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.bm-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-mode {
+  padding: 5px 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-mode.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.colorbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.colorbar-gradient {
+  width: 100px;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(to right, #0000ff, #ffffff, #ff0000);
+}
+
+.bm-canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
