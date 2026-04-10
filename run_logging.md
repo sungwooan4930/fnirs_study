@@ -184,7 +184,46 @@
 - UI 레이어(src/ui/)는 웹 버전으로 대체 예정
 
 ### 다음 단계
-- [ ] 웹 서비스 스펙 문서 작성 (brainstorming 완료 후)
-- [ ] Excalidraw로 화면 구성 와이어프레임
-- [ ] v0.dev로 React 컴포넌트 초안 생성
-- [ ] React 프로젝트 구조 생성 (web/ 디렉토리)
+- [x] 웹 서비스 스펙 문서 작성 → `docs/superpowers/specs/2026-04-10-web-service-design.md`
+- [x] 구현 계획 작성 → `docs/superpowers/plans/2026-04-10-web-service.md` (Task 0~13)
+- [x] React+Vite 프로젝트 구조 생성 (web/ 디렉토리)
+
+---
+
+## 2026-04-10 — 웹 서비스 프로토타입 완성 (Task 0~13)
+
+### 완료 항목
+
+| Task | 내용 | 주요 파일 |
+|------|------|-----------|
+| 0 | Vite+React 초기화, 다크 테마, 3탭 구조 | `web/` 전체 |
+| 1 | AppContext — 전역 상태 (bleStatus, sessionData 등) | `src/context/AppContext.jsx` |
+| 2 | lib/mbll.js — Modified Beer-Lambert Law JS 포팅 | `src/lib/mbll.js` |
+| 3 | lib/filters.js — Butterworth 밴드패스 (fili 라이브러리) | `src/lib/filters.js` |
+| 4 | lib/rbf.js — RBF 보간 + BWR 컬러맵 | `src/lib/rbf.js` |
+| 5 | lib/simulator.js — Python FNIRSSimulator JS 포팅 | `src/lib/simulator.js` |
+| 6 | pipeline.worker.js + usePipeline 훅 — Web Worker 신호처리 | `src/workers/`, `src/hooks/usePipeline.js` |
+| 7 | useBLE.js — Web Bluetooth API + 시뮬레이터 모드 | `src/hooks/useBLE.js` |
+| 8 | TopBar — BLE 연결 버튼, 상태 표시, CI 게이지 | `src/components/TopBar.jsx` |
+| 9 | CalibrationTab — SNR 바 차트, 채널 상태, 진행 버튼 | `src/components/CalibrationTab.jsx` |
+| 10 | TimeSeriesTab — Canvas 실시간 HbO/HbR 그래프 | `src/components/TimeSeriesTab.jsx` |
+| 11 | BrainMapTab — RBF 보간 BWR Canvas 렌더링 | `src/components/BrainMapTab.jsx` |
+| 12 | CSV 내보내기 + sessionStorage 임시 저장 | TopBar, AppContext |
+| 13 | 최종 단위 테스트 — 25 tests passed (4 test files) | `src/__tests__/` |
+
+### 주요 기술 결정 사항
+- `iir-filter` npm 패키지 미존재 → `fili` v2.0.3으로 대체
+- `fili` BW 파라미터: Hz가 아닌 옥타브 단위 (`BW = Math.log2(highHz / lowHz)`)
+- Web Worker는 ES module 방식으로 생성 (`{ type: 'module' }`)
+- sessionStorage: 새로고침 후에도 세션 데이터 복원 가능
+
+### 개발 실행
+```bash
+cd web && npm run dev
+# http://localhost:5173/?simulate=true 접속 → 시뮬레이터 모드
+```
+
+### 다음 단계
+- [ ] 실제 BLE 하드웨어 UUID 확정 후 useBLE.js에 characteristic 구독 추가
+- [ ] 고객 데모 후 iOS 지원 방식 협의 (Bluefy vs React Native)
+- [ ] 정적 호스팅 배포 환경 선택 (Netlify / Vercel / self-hosted)
