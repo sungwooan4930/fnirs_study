@@ -264,3 +264,25 @@ cd web && npm run dev
 
 ### 커밋
 - `feat(web): UI 전면 재설계 — Dark+Lovable Blue, Inter 폰트, Brain Map SVG 오버레이, TS auto-scale, Report 탭`
+
+---
+
+## 2026-04-13 — 프로필 입력 단계 추가
+
+### 완료 항목
+
+| 항목 | 내용 |
+|------|------|
+| ProfileStep 컴포넌트 | Calibration 전 이름·나이 입력 카드. 유효성 검사 통과 시 "시작하기 ▶" 활성화 |
+| AppContext | `userProfile` 상태(`{ name, age }`) 추가, context value에 노출 |
+| App.jsx | `TabContainer`에서 `userProfile` 없을 때 `ProfileStep` 렌더. **Rules of Hooks** 준수: `useState` 선언을 조건부 return 앞에 배치 |
+| ReportTab | 세션 요약 info-grid에 이름·나이·측정날짜·측정시간 4열 표시 |
+
+### 주요 기술 결정 사항
+- Rules of Hooks 위반 디버깅: 조건부 return 뒤에 `useState` 배치 시 React 런타임 에러 발생 → `useState` 선언을 컴포넌트 최상단으로 이동
+
+### 테스트
+- 25 tests passed (4 test files) — 변경 후에도 전부 통과
+
+### 커밋
+- `feat(web): 프로필 입력 단계 추가 (이름·나이) — Report에 반영`
