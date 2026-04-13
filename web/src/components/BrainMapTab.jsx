@@ -86,6 +86,8 @@ export default function BrainMapTab() {
           {CH_GRAD.map(({ id }) => (
             <rect key={id} width="340" height="290" fill={`url(#${id})`} />
           ))}
+          {/* Reset 버튼 UI 가리기 */}
+          <rect x="100" y="256" width="140" height="34" fill="#000" />
         </svg>
       </div>
 
