@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .bm-controls {
@@ -12,14 +12,18 @@
 }
 
 .btn-mode {
-  padding: 5px 18px;
+  padding: 5px 20px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 20px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 0.9rem;
+  font-family: 'Inter', system-ui, sans-serif;
+  transition: all 0.15s;
 }
+
+.btn-mode:hover { background: var(--surface-2); color: var(--text); }
 
 .btn-mode.active {
   background: var(--accent);
@@ -36,15 +40,38 @@
 }
 
 .colorbar-gradient {
-  width: 100px;
-  height: 12px;
-  border-radius: 6px;
-  background: linear-gradient(to right, #0000ff, #ffffff, #ff0000);
+  width: 80px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(to right, #4e92ff, #ffffff, #ef4444);
 }
 
-.bm-canvas {
-  max-width: 100%;
+/* brain image + SVG overlay container */
+.bm-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 340px;
+  width: 100%;
+}
+
+.bm-brain-img {
+  width: 100%;
   height: auto;
-  border-radius: 10px;
-  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: block;
+}
+
+.bm-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+}
+
+.bm-caption {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
 }

@@ -4,7 +4,7 @@
   gap: 16px;
   padding: 8px 16px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 2px solid var(--border-accent);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
@@ -12,7 +12,7 @@
 .app-title {
   font-weight: 700;
   font-size: 1.1rem;
-  color: var(--accent);
+  color: var(--accent-2);
   margin-right: auto;
 }
 
@@ -32,17 +32,23 @@
 .ble-label { font-size: 0.85rem; color: var(--text-muted); }
 
 .btn-connect, .btn-disconnect {
-  padding: 4px 14px;
-  border-radius: 6px;
+  padding: 4px 16px;
+  border-radius: 20px;
   border: none;
   cursor: pointer;
   font-size: 0.85rem;
   font-weight: 600;
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
 .btn-connect { background: var(--accent); color: #fff; }
 .btn-connect:hover { background: var(--accent-hover); }
-.btn-disconnect { background: var(--error); color: #fff; }
+.btn-disconnect {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.btn-disconnect:hover { background: rgba(239, 68, 68, 0.22); }
 
 .ci-group {
   display: flex;
@@ -62,7 +68,7 @@
 
 .ci-bar-fill {
   height: 100%;
-  background: linear-gradient(to right, #4a90d9, #e57373);
+  background: linear-gradient(to right, var(--accent), var(--accent-2));
   border-radius: 5px;
   transition: width 0.2s;
 }
@@ -71,14 +77,15 @@
 
 .btn-download {
   padding: 4px 12px;
-  border-radius: 6px;
+  border-radius: 20px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 0.82rem;
+  font-family: 'Inter', system-ui, sans-serif;
 }
-.btn-download:hover:not(:disabled) { background: var(--border); color: var(--text); }
+.btn-download:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
 .btn-download:disabled { opacity: 0.35; cursor: not-allowed; }
 
 @media (max-width: 768px) {

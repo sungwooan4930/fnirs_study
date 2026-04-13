@@ -78,7 +78,9 @@ export default function CalibrationTab() {
                       className="bar-fill"
                       style={{
                         width: `${Math.round(snr[ch][wlIdx] * 100)}%`,
-                        background: snr[ch][wlIdx] >= SNR_THRESHOLD ? 'var(--success)' : 'var(--warning)',
+                        background: snr[ch][wlIdx] >= SNR_THRESHOLD
+                          ? 'linear-gradient(to right, var(--accent), var(--accent-2))'
+                          : 'var(--warning)',
                       }}
                     />
                   </div>

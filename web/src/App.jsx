@@ -4,6 +4,7 @@ import TopBar from './components/TopBar'
 import CalibrationTab from './components/CalibrationTab'
 import TimeSeriesTab from './components/TimeSeriesTab'
 import BrainMapTab from './components/BrainMapTab'
+import ReportTab from './components/ReportTab'
 import './App.css'
 
 function TabContainer() {
@@ -35,11 +36,20 @@ function TabContainer() {
         >
           Time Series
         </button>
+        <button
+          className={activeTab === 'report' ? 'tab active' : 'tab'}
+          disabled={!calibrationDone}
+          onClick={() => calibrationDone && setActiveTab('report')}
+          title={!calibrationDone ? 'Calibration 완료 후 활성화됩니다' : undefined}
+        >
+          Report
+        </button>
       </nav>
       <main className="tab-content">
         {activeTab === 'calibration' && <CalibrationTab />}
         {activeTab === 'brainmap' && <BrainMapTab />}
         {activeTab === 'timeseries' && <TimeSeriesTab />}
+        {activeTab === 'report' && <ReportTab />}
       </main>
     </>
   )

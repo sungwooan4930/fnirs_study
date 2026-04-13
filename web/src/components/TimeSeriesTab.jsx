@@ -3,23 +3,44 @@ import { useApp } from '../context/AppContext'
 import './TimeSeriesTab.css'
 
 const N_CHANNELS = 4
-const Y_MIN = -5.0
-const Y_MAX = 5.0
-const COLORS_HBO = ['#e57373', '#ef9a9a', '#ef5350', '#c62828']
-const COLORS_HBR = ['#64b5f6', '#90caf9', '#42a5f5', '#1565c0']
+const COLOR_HBO = '#ef4444'
+const COLOR_HBR = '#4e92ff'
 const MAX_POINTS = 500  // 5초 × 100Hz
+const PADDING = 0.12    // 상하 여백 비율
 
-export default function TimeSeriesTab() {
-  const { sessionData } = useApp()
+// 채널 ch의 HbO+HbR 전체에서 min/max 계산, 데이터 없으면 ±1 기본
+function calcRange(data, ch) {
+  if (data.length < 2) return { yMin: -1, yMax: 1 }
+  let lo = Infinity, hi = -Infinity
+  for (const d of data) {
+    if (d.hbo[ch] < lo) lo = d.hbo[ch]
+    if (d.hbo[ch] > hi) hi = d.hbo[ch]
+    if (d.hbr[ch] < lo) lo = d.hbr[ch]
+    if (d.hbr[ch] > hi) hi = d.hbr[ch]
+  }
+  const span = hi - lo || 1
+  return { yMin: lo - span * PADDING, yMax: hi + span * PADDING }
+}
+
+function drawLine(ctx, data, ch, key, W, H, color, yMin, yMax) {
+  const n = data.length
+  if (n < 2) return
+  const range = yMax - yMin
+  ctx.strokeStyle = color
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  for (let i = 0; i < n; i++) {
+    const val = data[i][key][ch]
+    const x = (i / (n - 1)) * W
+    const y = H * (1 - (val - yMin) / range)
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+  }
+  ctx.stroke()
+}
+
+function ChannelCanvas({ ch, dataRef }) {
   const canvasRef = useRef(null)
-  const dataRef = useRef([])  // 최근 MAX_POINTS 샘플
 
-  // sessionData 변경 시 dataRef 갱신
-  useEffect(() => {
-    dataRef.current = sessionData.slice(-MAX_POINTS)
-  }, [sessionData])
-
-  // requestAnimationFrame 렌더 루프
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -31,46 +52,35 @@ export default function TimeSeriesTab() {
       const H = canvas.height
       const data = dataRef.current
 
-      ctx.fillStyle = '#1a1a1a'
+      ctx.fillStyle = '#0f1117'
       ctx.fillRect(0, 0, W, H)
 
-      if (data.length < 2) {
-        animId = requestAnimationFrame(draw)
-        return
-      }
+      const { yMin, yMax } = calcRange(data, ch)
+      const range = yMax - yMin
 
-      const rowH = H / N_CHANNELS
-
-      for (let ch = 0; ch < N_CHANNELS; ch++) {
-        const y0 = ch * rowH
-        const yMid = y0 + rowH / 2
-
-        // 채널 구분선
-        ctx.strokeStyle = '#333'
+      // 0선 (범위 내에 있을 때만)
+      if (yMin < 0 && yMax > 0) {
+        const yZero = H * (1 - (0 - yMin) / range)
+        ctx.strokeStyle = '#1e2130'
+        ctx.setLineDash([4, 4])
         ctx.lineWidth = 1
         ctx.beginPath()
-        ctx.moveTo(0, y0 + rowH)
-        ctx.lineTo(W, y0 + rowH)
-        ctx.stroke()
-
-        // 0선
-        ctx.strokeStyle = '#444'
-        ctx.setLineDash([4, 4])
-        ctx.beginPath()
-        ctx.moveTo(0, yMid)
-        ctx.lineTo(W, yMid)
+        ctx.moveTo(0, yZero)
+        ctx.lineTo(W, yZero)
         ctx.stroke()
         ctx.setLineDash([])
+      }
 
-        // HbO 선
-        drawLine(ctx, data, ch, 'hbo', W, rowH, y0, COLORS_HBO[ch])
-        // HbR 선
-        drawLine(ctx, data, ch, 'hbr', W, rowH, y0, COLORS_HBR[ch])
+      drawLine(ctx, data, ch, 'hbo', W, H, COLOR_HBO, yMin, yMax)
+      drawLine(ctx, data, ch, 'hbr', W, H, COLOR_HBR, yMin, yMax)
 
-        // 채널 레이블
-        ctx.fillStyle = '#888'
-        ctx.font = '11px monospace'
-        ctx.fillText(`Ch${ch + 1}`, 6, y0 + 14)
+      // Y축 범위 레이블
+      if (data.length > 1) {
+        ctx.fillStyle = '#4b5563'
+        ctx.font = '9px Inter, monospace'
+        ctx.textAlign = 'right'
+        ctx.fillText(yMax.toFixed(1), W - 3, 10)
+        ctx.fillText(yMin.toFixed(1), W - 3, H - 3)
       }
 
       animId = requestAnimationFrame(draw)
@@ -78,32 +88,36 @@ export default function TimeSeriesTab() {
 
     animId = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(animId)
-  }, [])
+  }, [ch, dataRef])
 
   return (
-    <div className="timeseries">
-      <div className="ts-legend">
-        <span style={{ color: COLORS_HBO[0] }}>■ HbO</span>
-        <span style={{ color: COLORS_HBR[0] }}>■ HbR</span>
-        <span className="ts-scale">±5 μmol/L</span>
-      </div>
-      <canvas ref={canvasRef} className="ts-canvas" width={900} height={480} />
+    <div className="ts-card">
+      <div className="ts-card-label">Ch {ch + 1}</div>
+      <canvas ref={canvasRef} className="ts-canvas" width={440} height={180} />
     </div>
   )
 }
 
-function drawLine(ctx, data, ch, key, W, rowH, y0, color) {
-  const n = data.length
-  ctx.strokeStyle = color
-  ctx.lineWidth = 1.5
-  ctx.beginPath()
+export default function TimeSeriesTab() {
+  const { sessionData } = useApp()
+  const dataRef = useRef([])
 
-  for (let i = 0; i < n; i++) {
-    const val = data[i][key][ch]
-    const x = (i / (n - 1)) * W
-    const t = (val - Y_MIN) / (Y_MAX - Y_MIN)
-    const y = y0 + rowH * (1 - t)
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-  }
-  ctx.stroke()
+  useEffect(() => {
+    dataRef.current = sessionData.slice(-MAX_POINTS)
+  }, [sessionData])
+
+  return (
+    <div className="timeseries">
+      <div className="ts-legend">
+        <span style={{ color: COLOR_HBO }}>■ HbO</span>
+        <span style={{ color: COLOR_HBR }}>■ HbR</span>
+        <span className="ts-scale">auto scale · μmol/L</span>
+      </div>
+      <div className="ts-grid">
+        {Array.from({ length: N_CHANNELS }, (_, ch) => (
+          <ChannelCanvas key={ch} ch={ch} dataRef={dataRef} />
+        ))}
+      </div>
+    </div>
+  )
 }

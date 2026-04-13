@@ -47,9 +47,21 @@
   border-radius: 99px;
 }
 
-.status-badge.good { background: var(--success); color: #000; }
-.status-badge.poor { background: var(--error); color: #fff; }
-.status-badge.waiting { background: var(--border); color: var(--text-muted); }
+.status-badge.good {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+.status-badge.poor {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+.status-badge.waiting {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
 
 .wl-bars { display: flex; flex-direction: column; gap: 8px; }
 
@@ -84,9 +96,10 @@
   background: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: 20px;
   font-size: 1rem;
   font-weight: 700;
+  font-family: 'Inter', system-ui, sans-serif;
   cursor: pointer;
   transition: background 0.15s;
 }

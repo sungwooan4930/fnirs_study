@@ -227,3 +227,40 @@ cd web && npm run dev
 - [ ] 실제 BLE 하드웨어 UUID 확정 후 useBLE.js에 characteristic 구독 추가
 - [ ] 고객 데모 후 iOS 지원 방식 협의 (Bluefy vs React Native)
 - [ ] 정적 호스팅 배포 환경 선택 (Netlify / Vercel / self-hosted)
+
+---
+
+## 2026-04-13 — UI 전면 재설계 + Report 탭 추가
+
+### 배경
+고객 요청: Dark+Lovable Blue 디자인 시스템 적용, 실제 3D 뇌 이미지 활용, 채널별 플롯 분리, 세션 종료 레포트 추가
+
+### 완료 항목
+
+| 항목 | 내용 |
+|------|------|
+| 디자인 토큰 | `App.css` :root 전면 교체 — `#0f1117` 배경, `#1f55f1` 액센트 (Lovable Blue) |
+| 폰트 | Inter Variable (로컬 woff2, `web/public/fonts/InterVariable.woff2`) |
+| 탭/버튼 | pill shape (`border-radius: 20px`) 전체 적용 |
+| BrainMapTab | Canvas 방식 → `<img>`+SVG 오버레이 방식으로 교체. `refer/3d brain.png` → `web/public/brain.png`. 채널 마커 제거. 채널별 radialGradient 블롭(BWR 색상) |
+| TimeSeriesTab | 단일 캔버스 → 2×2 채널별 ChannelCanvas 그리드. **Auto-scale** 적용 (채널별 min/max 동적 계산, 12% 패딩, Y축 레이블 표시) |
+| ReportTab | 신규 생성. 마운트 시점 스냅샷 고정(실시간 업데이트 없음). conic-gradient 점수 원, SVG CI 시계열, 뇌 맵 스냅샷, **뇌 부위명** 표기 (Ch번호 아님) |
+
+### 채널 → 뇌 부위 매핑
+| 채널 | 부위 |
+|------|------|
+| Ch1 | 좌전방 PFC |
+| Ch2 | 우전방 PFC |
+| Ch3 | 좌후방 PFC |
+| Ch4 | 우후방 PFC |
+
+### 주요 기술 결정 사항
+- BrainMapTab: canvas 기반 RBF 보간 제거 → SVG radialGradient 오버레이로 단순화 (의존성 없음)
+- ReportTab 스냅샷: `const [snapshot] = useState(() => sessionData)` — 마운트 1회만 캡처
+- TimeSeriesTab auto-scale: 매 RAF 프레임마다 `calcRange()` 호출, 0선은 범위 내에 있을 때만 표시
+
+### 테스트
+- 25 tests passed (4 test files) — 변경 후에도 전부 통과
+
+### 커밋
+- `feat(web): UI 전면 재설계 — Dark+Lovable Blue, Inter 폰트, Brain Map SVG 오버레이, TS auto-scale, Report 탭`

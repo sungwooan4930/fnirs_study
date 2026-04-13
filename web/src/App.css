@@ -1,22 +1,25 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #1a1a1a;
-  --surface: #242424;
-  --border: #333;
-  --text: #e0e0e0;
-  --text-muted: #888;
-  --accent: #4a90d9;
-  --accent-hover: #5aa0e9;
-  --success: #4caf50;
-  --error: #f44336;
-  --warning: #ff9800;
+  --bg: #0f1117;
+  --surface: #1a1f35;
+  --surface-2: #212840;
+  --border: #1e2130;
+  --border-accent: #1f55f1;
+  --text: #e8eaf0;
+  --text-muted: #6b7280;
+  --accent: #1f55f1;
+  --accent-2: #4e92ff;
+  --accent-hover: #3b6ef0;
+  --success: #22c55e;
+  --error: #ef4444;
+  --warning: #f59e0b;
 }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   height: 100dvh;
   overflow: hidden;
 }
@@ -25,22 +28,6 @@ body {
   display: flex;
   flex-direction: column;
   height: 100dvh;
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 8px 16px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.app-title {
-  font-weight: 700;
-  font-size: 1.1rem;
-  color: var(--accent);
 }
 
 .tab-nav {
@@ -55,16 +42,17 @@ body {
 .tab {
   padding: 6px 20px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 20px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 0.9rem;
+  font-family: 'Inter', system-ui, sans-serif;
   transition: all 0.15s;
 }
 
 .tab:hover:not(:disabled) {
-  background: var(--border);
+  background: var(--surface-2);
   color: var(--text);
 }
 
@@ -85,7 +73,6 @@ body {
   padding: 16px;
 }
 
-/* 반응형: 모바일 탭을 하단으로 */
 @media (max-width: 768px) {
   .app { flex-direction: column-reverse; }
   .tab-nav {
