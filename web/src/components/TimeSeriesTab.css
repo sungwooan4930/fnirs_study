@@ -17,7 +17,7 @@
 .ts-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
 }
 
@@ -25,10 +25,10 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .ts-card-label {

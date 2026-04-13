@@ -93,7 +93,7 @@ function ChannelCanvas({ ch, dataRef }) {
   return (
     <div className="ts-card">
       <div className="ts-card-label">Ch {ch + 1}</div>
-      <canvas ref={canvasRef} className="ts-canvas" width={440} height={180} />
+      <canvas ref={canvasRef} className="ts-canvas" width={440} height={120} />
     </div>
   )
 }
