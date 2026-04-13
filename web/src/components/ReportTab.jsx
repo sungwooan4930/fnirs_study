@@ -189,7 +189,7 @@ function RegionAverages({ avgs }) {
 }
 
 export default function ReportTab() {
-  const { sessionData } = useApp()
+  const { sessionData, userProfile } = useApp()
 
   // 마운트 시점 스냅샷 고정 — 이후 실시간 변화 무시
   const [snapshot] = useState(() => sessionData)
@@ -243,16 +243,20 @@ export default function ReportTab() {
           <div className="section-label">세션 요약</div>
           <div className="info-grid">
             <div className="info-card">
+              <div className="info-card-label">이름</div>
+              <div className="info-card-value">{userProfile?.name ?? '—'}</div>
+            </div>
+            <div className="info-card">
+              <div className="info-card-label">나이</div>
+              <div className="info-card-value">{userProfile?.age != null ? `${userProfile.age}세` : '—'}</div>
+            </div>
+            <div className="info-card">
               <div className="info-card-label">측정 날짜</div>
               <div className="info-card-value">{dateStr}</div>
             </div>
             <div className="info-card">
               <div className="info-card-label">측정 시간</div>
               <div className="info-card-value">{formatDuration(duration)}</div>
-            </div>
-            <div className="info-card">
-              <div className="info-card-label">샘플 수</div>
-              <div className="info-card-value">{snapshot.length.toLocaleString()}</div>
             </div>
           </div>
         </div>

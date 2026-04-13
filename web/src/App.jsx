@@ -5,11 +5,14 @@ import CalibrationTab from './components/CalibrationTab'
 import TimeSeriesTab from './components/TimeSeriesTab'
 import BrainMapTab from './components/BrainMapTab'
 import ReportTab from './components/ReportTab'
+import ProfileStep from './components/ProfileStep'
 import './App.css'
 
 function TabContainer() {
-  const { calibrationDone } = useApp()
+  const { calibrationDone, userProfile } = useApp()
   const [activeTab, setActiveTab] = useState('calibration')
+
+  if (!userProfile) return <ProfileStep />
 
   return (
     <>

@@ -5,6 +5,8 @@ const AppContext = createContext(null)
 export function AppProvider({ children }) {
   const [bleStatus, setBleStatus] = useState('idle')
 
+  const [userProfile, setUserProfile] = useState(null)  // { name, age }
+
   const [calibrationDone, setCalibrationDone] = useState(false)
 
   const [processedSample, setProcessedSample] = useState(null)
@@ -36,6 +38,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       bleStatus, setBleStatus,
+      userProfile, setUserProfile,
       calibrationDone, setCalibrationDone,
       processedSample,
       sessionData,
