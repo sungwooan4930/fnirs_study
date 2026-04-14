@@ -102,6 +102,14 @@ body {
   padding: 16px;
 }
 
+.measuring-elapsed {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent-2);
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
 .btn-stop {
   padding: 7px 20px;
   background: var(--error);

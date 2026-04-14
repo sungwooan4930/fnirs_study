@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
 import TopBar from './components/TopBar'
 import CalibrationTab from './components/CalibrationTab'
@@ -8,9 +8,22 @@ import ReportTab from './components/ReportTab'
 import ProfileStep from './components/ProfileStep'
 import './App.css'
 
+function useElapsed() {
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    const start = Date.now()
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const m = String(Math.floor(elapsed / 60)).padStart(2, '0')
+  const s = String(elapsed % 60).padStart(2, '0')
+  return `${m}:${s}`
+}
+
 function MeasuringView() {
   const { setAppPhase } = useApp()
   const [activeTab, setActiveTab] = useState('brainmap')
+  const elapsed = useElapsed()
 
   return (
     <div className="measuring-view">
@@ -29,6 +42,7 @@ function MeasuringView() {
             Time Series
           </button>
         </nav>
+        <span className="measuring-elapsed">⏱ {elapsed}</span>
         <button className="btn-stop" onClick={() => setAppPhase('report')}>
           ■ 측정 종료
         </button>
