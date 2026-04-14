@@ -47,7 +47,11 @@ function AppFlow() {
   if (!userProfile) return <ProfileStep />
   if (appPhase === 'calibration') return <CalibrationTab />
   if (appPhase === 'measuring') return <MeasuringView />
-  if (appPhase === 'report') return <ReportTab />
+  if (appPhase === 'report') return (
+    <div className="report-scroll-wrap">
+      <ReportTab />
+    </div>
+  )
 }
 
 export default function App() {
