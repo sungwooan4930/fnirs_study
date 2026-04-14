@@ -13,7 +13,7 @@
 const N_CHANNELS = 4
 const N_WAVELENGTHS = 3
 const SAMPLING_RATE_HZ = 10.0
-const HBO_AMPLITUDE = 0.5
+const HBO_AMPLITUDE = 0.01
 const HBO_FREQ_HZ = 0.1
 const NOISE_STD = 0.05
 

@@ -79,8 +79,13 @@ function processWindow(packets) {
   const hboNow = hbo.map(ch => ch[ch.length - 1])
   const hbrNow = hbr.map(ch => ch[ch.length - 1])
 
-  // 집중도 지수: HbO 평균을 [0,1]로 정규화
-  const ci = Math.max(0, Math.min(1, (hboNow.reduce((s, v) => s + v, 0) / N_CHANNELS) / 10.0 + 0.5))
+  // 집중도 지수: 윈도우 내 전체 HbO min/max 기준 현재 채널 평균 정규화
+  const hboMean = hboNow.reduce((s, v) => s + v, 0) / N_CHANNELS
+  const allHbo = hbo.flat()
+  const hboMin = Math.min(...allHbo)
+  const hboMax = Math.max(...allHbo)
+  const hboRange = hboMax - hboMin || 1
+  const ci = Math.max(0, Math.min(1, (hboMean - hboMin) / hboRange))
 
   return {
     timestamp: packets[packets.length - 1].timestamp,
