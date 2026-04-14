@@ -7,6 +7,9 @@ export function AppProvider({ children }) {
 
   const [userProfile, setUserProfile] = useState(null)  // { name, age }
 
+  // 앱 단계: 'calibration' | 'measuring' | 'report'
+  const [appPhase, setAppPhase] = useState('calibration')
+
   const [calibrationDone, setCalibrationDone] = useState(false)
 
   const [processedSample, setProcessedSample] = useState(null)
@@ -39,6 +42,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       bleStatus, setBleStatus,
       userProfile, setUserProfile,
+      appPhase, setAppPhase,
       calibrationDone, setCalibrationDone,
       processedSample,
       sessionData,

@@ -8,7 +8,7 @@ const CALIB_DURATION_MS = 3000
 const SNR_THRESHOLD = 0.6  // 이 이상이면 Good
 
 export default function CalibrationTab() {
-  const { bleStatus, setCalibrationDone } = useApp()
+  const { bleStatus, setCalibrationDone, setAppPhase } = useApp()
   const [snr, setSnr] = useState(
     Array.from({ length: N_CHANNELS }, () => [0, 0, 0])
   )
@@ -95,9 +95,9 @@ export default function CalibrationTab() {
       <button
         className="btn-proceed"
         disabled={!allGood}
-        onClick={() => setCalibrationDone(true)}
+        onClick={() => { setCalibrationDone(true); setAppPhase('measuring') }}
       >
-        진행 ▶
+        측정 시작 ▶
       </button>
     </div>
   )

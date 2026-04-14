@@ -8,54 +8,46 @@ import ReportTab from './components/ReportTab'
 import ProfileStep from './components/ProfileStep'
 import './App.css'
 
-function TabContainer() {
-  const { calibrationDone, userProfile } = useApp()
-  const [activeTab, setActiveTab] = useState('calibration')
-
-  if (!userProfile) return <ProfileStep />
+function MeasuringView() {
+  const { setAppPhase } = useApp()
+  const [activeTab, setActiveTab] = useState('brainmap')
 
   return (
-    <>
-      <nav className="tab-nav">
-        <button
-          className={activeTab === 'calibration' ? 'tab active' : 'tab'}
-          onClick={() => setActiveTab('calibration')}
-        >
-          Calibration
+    <div className="measuring-view">
+      <div className="measuring-toolbar">
+        <nav className="measuring-tabs">
+          <button
+            className={activeTab === 'brainmap' ? 'tab active' : 'tab'}
+            onClick={() => setActiveTab('brainmap')}
+          >
+            3D Brain
+          </button>
+          <button
+            className={activeTab === 'timeseries' ? 'tab active' : 'tab'}
+            onClick={() => setActiveTab('timeseries')}
+          >
+            Time Series
+          </button>
+        </nav>
+        <button className="btn-stop" onClick={() => setAppPhase('report')}>
+          ■ 측정 종료
         </button>
-        <button
-          className={activeTab === 'brainmap' ? 'tab active' : 'tab'}
-          disabled={!calibrationDone}
-          onClick={() => calibrationDone && setActiveTab('brainmap')}
-          title={!calibrationDone ? 'Calibration 완료 후 활성화됩니다' : undefined}
-        >
-          Brain Map
-        </button>
-        <button
-          className={activeTab === 'timeseries' ? 'tab active' : 'tab'}
-          disabled={!calibrationDone}
-          onClick={() => calibrationDone && setActiveTab('timeseries')}
-          title={!calibrationDone ? 'Calibration 완료 후 활성화됩니다' : undefined}
-        >
-          Time Series
-        </button>
-        <button
-          className={activeTab === 'report' ? 'tab active' : 'tab'}
-          disabled={!calibrationDone}
-          onClick={() => calibrationDone && setActiveTab('report')}
-          title={!calibrationDone ? 'Calibration 완료 후 활성화됩니다' : undefined}
-        >
-          Report
-        </button>
-      </nav>
-      <main className="tab-content">
-        {activeTab === 'calibration' && <CalibrationTab />}
+      </div>
+      <div className="measuring-content">
         {activeTab === 'brainmap' && <BrainMapTab />}
         {activeTab === 'timeseries' && <TimeSeriesTab />}
-        {activeTab === 'report' && <ReportTab />}
-      </main>
-    </>
+      </div>
+    </div>
   )
+}
+
+function AppFlow() {
+  const { userProfile, appPhase } = useApp()
+
+  if (!userProfile) return <ProfileStep />
+  if (appPhase === 'calibration') return <CalibrationTab />
+  if (appPhase === 'measuring') return <MeasuringView />
+  if (appPhase === 'report') return <ReportTab />
 }
 
 export default function App() {
@@ -63,7 +55,7 @@ export default function App() {
     <AppProvider>
       <div className="app">
         <TopBar />
-        <TabContainer />
+        <AppFlow />
       </div>
     </AppProvider>
   )

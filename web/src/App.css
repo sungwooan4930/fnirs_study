@@ -73,6 +73,50 @@ body {
   padding: 16px;
 }
 
+/* 측정 화면 */
+.measuring-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.measuring-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.measuring-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.measuring-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.btn-stop {
+  padding: 7px 20px;
+  background: var(--error);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-stop:hover { opacity: 0.85; }
+
 @media (max-width: 768px) {
   .app { flex-direction: column-reverse; }
   .tab-nav {
