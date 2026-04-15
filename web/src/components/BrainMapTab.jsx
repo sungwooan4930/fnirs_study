@@ -1,25 +1,48 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import BrainModelPNG from './BrainModel/BrainModelPNG'
 import { BRAIN_FRONT } from './BrainModel/brainViews'
 import './BrainMapTab.css'
 
+const SAMPLING_HZ  = 10
+const SMOOTH_SEC   = 5
+const SMOOTH_N     = SAMPLING_HZ * SMOOTH_SEC  // 50 샘플 = 5초
+
 export default function BrainMapTab() {
   const { processedSample, baseline } = useApp()
   const [mode, setMode] = useState('hbo')  // 'hbo' | 'hbr'
+
+  // ── 5초 슬라이딩 버퍼 (집중도 스무딩) ──────────────────────────
+  const deltaBufferRef = useRef([])   // 최근 SMOOTH_N개의 meanDelta 보관
+  const [focusLevel, setFocusLevel] = useState('보통')
+
+  useEffect(() => {
+    if (!processedSample) return
+
+    // 채널 평균 HbO delta (현재 샘플)
+    const delta = processedSample.hbo.reduce(
+      (s, v, i) => s + (v - baseline.hbo[i]), 0
+    ) / processedSample.hbo.length
+
+    // 버퍼에 추가 (최대 SMOOTH_N개 유지)
+    const buf = deltaBufferRef.current
+    deltaBufferRef.current = buf.length >= SMOOTH_N
+      ? [...buf.slice(1), delta]
+      : [...buf, delta]
+
+    // 버퍼 평균으로 집중도 판정
+    const smoothed = deltaBufferRef.current.reduce((s, v) => s + v, 0)
+                   / deltaBufferRef.current.length
+    const level = smoothed > 0.3 ? '높음' : smoothed > -0.1 ? '보통' : '낮음'
+    setFocusLevel(level)
+  }, [processedSample, baseline])
+  // ────────────────────────────────────────────────────────────────
 
   const rawValues = processedSample
     ? (mode === 'hbo' ? processedSample.hbo : processedSample.hbr)
     : [0, 0, 0, 0]
   const baselineVals = mode === 'hbo' ? baseline.hbo : baseline.hbr
   const values = rawValues.map((v, i) => v - baselineVals[i])
-
-  // 집중도: 전전두엽 HbO 델타 평균으로 산출 (HbO 증가 = 인지 부하 상승)
-  const hboDeltas = processedSample
-    ? processedSample.hbo.map((v, i) => v - baseline.hbo[i])
-    : [0, 0, 0, 0]
-  const meanDelta = hboDeltas.reduce((s, v) => s + v, 0) / hboDeltas.length
-  const focusLevel = meanDelta > 0.3 ? '높음' : meanDelta > -0.1 ? '보통' : '낮음'
 
   return (
     <div className="brainmap">
