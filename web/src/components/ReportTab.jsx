@@ -109,18 +109,18 @@ function CIChart({ data }) {
         <span className="ci-avg">평균 CI: {avgCI}%</span>
       </div>
       <svg width="100%" height="100" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-        <rect width={W} height={H} fill="#eef1f9" rx="6" />
+        <rect width={W} height={H} fill="#eef2ff" rx="6" />
         {[25, 50, 75].map(y => (
-          <line key={y} x1="0" y1={y} x2={W} y2={y} stroke="#dde2f0" strokeWidth="1" strokeDasharray="4,4" />
+          <line key={y} x1="0" y1={y} x2={W} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4,4" />
         ))}
         <defs>
           <linearGradient id="ci-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#2755e8" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#2755e8" stopOpacity="0" />
+            <stop offset="0%"   stopColor="#4f46e5" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
           </linearGradient>
         </defs>
         <polygon points={polyPts} fill="url(#ci-grad)" />
-        <polyline points={pts} fill="none" stroke="#2755e8" strokeWidth="2.5" />
+        <polyline points={pts} fill="none" stroke="#4f46e5" strokeWidth="2.5" />
         <text x="6" y="22" fontSize="8" fill="#6b7280" fontFamily="system-ui">100%</text>
         <text x="6" y="47" fontSize="8" fill="#6b7280" fontFamily="system-ui">50%</text>
         <text x="6" y="97" fontSize="8" fill="#6b7280" fontFamily="system-ui">0%</text>
@@ -262,7 +262,7 @@ export default function ReportTab() {
           <div className="score-row">
             <div
               className="score-circle"
-              style={{ background: `conic-gradient(#1f55f1 0% ${score}%, #1e2130 ${score}% 100%)` }}
+              style={{ background: `conic-gradient(#4f46e5 0% ${score}%, #e2e8f0 ${score}% 100%)` }}
             >
               <div className="score-inner">
                 <span className="score-num">{score}</span>

@@ -35,7 +35,7 @@ function MeasuringView() {
             className={activeTab === 'brainmap' ? 'tab active' : 'tab'}
             onClick={() => setActiveTab('brainmap')}
           >
-            3D Brain
+            Brain Map
           </button>
           <button
             className={activeTab === 'timeseries' ? 'tab active' : 'tab'}
