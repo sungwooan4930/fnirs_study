@@ -97,3 +97,8 @@
   font-size: 0.82rem;
   color: var(--error);
 }
+
+@media (max-width: 480px) {
+  .conn-card { padding: 32px 24px; }
+  .conn-title { font-size: 1.3rem; }
+}

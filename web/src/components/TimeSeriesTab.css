@@ -39,7 +39,9 @@
 
 .ts-canvas {
   width: 100%;
-  height: auto;
+  flex: 1;        /* 카드 내 남은 높이를 채움 */
+  height: 0;      /* flex가 override — height:auto의 무한 증가 방지 */
+  min-height: 100px;
   border-radius: 6px;
   display: block;
 }

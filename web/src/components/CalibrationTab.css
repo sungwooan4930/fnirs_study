@@ -110,5 +110,17 @@
 .btn-proceed:disabled { opacity: 0.35; cursor: not-allowed; }
 
 @media (max-width: 600px) {
-  .snr-grid { grid-template-columns: 1fr; }
+  .snr-grid { grid-template-columns: 1fr; gap: 16px; margin-bottom: 24px; }
+  .calibration { padding: 6px 0; }
+  .calib-title { font-size: 1.6rem; margin-bottom: 12px; }
+  .calib-hint { font-size: 1rem; margin-bottom: 20px; }
+  .channel-card { padding: 20px 22px; }
+  .channel-label { font-size: 1.25rem; margin-bottom: 14px; }
+  .status-badge { font-size: 0.9rem; padding: 4px 12px; }
+  .wl-bars { gap: 12px; }
+  .wl-row { gap: 10px; }
+  .wl-label { font-size: 1rem; width: 60px; }
+  .bar-track { height: 24px; border-radius: 12px; }
+  .bar-value { font-size: 1rem; width: 50px; }
+  .btn-proceed { padding: 14px 40px; font-size: 1.1rem; }
 }

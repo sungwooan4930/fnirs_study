@@ -120,3 +120,9 @@
   color: var(--text);
   border-color: var(--text-muted);
 }
+
+@media (max-width: 480px) {
+  .baseline-card { padding: 32px 24px; }
+  .baseline-title { font-size: 1.3rem; }
+  .baseline-timer { font-size: 3rem; }
+}
