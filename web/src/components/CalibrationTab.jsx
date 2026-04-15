@@ -56,10 +56,6 @@ export default function CalibrationTab() {
     <div className="calibration">
       <h2 className="calib-title">신호 보정 (Calibration)</h2>
 
-      {bleStatus !== 'connected' && (
-        <p className="calib-hint">상단에서 fNIRS 기기를 먼저 연결하세요.</p>
-      )}
-
       <div className="snr-grid">
         {Array.from({ length: N_CHANNELS }, (_, ch) => (
           <div key={ch} className={`channel-card ${channelStatus[ch]}`}>

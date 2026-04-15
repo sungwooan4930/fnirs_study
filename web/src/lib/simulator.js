@@ -13,7 +13,7 @@
 const N_CHANNELS = 4
 const N_WAVELENGTHS = 3
 const SAMPLING_RATE_HZ = 10.0
-const HBO_AMPLITUDE = 0.01
+const HBO_AMPLITUDE = 0.05
 const HBO_FREQ_HZ = 0.1
 const NOISE_STD = 0.05
 
@@ -47,7 +47,8 @@ export class FNIRSSimulator {
       const channelIntensities = []
       for (let ch = 0; ch < N_CHANNELS; ch++) {
         const phaseOffset = ch * (2 * Math.PI / N_CHANNELS)
-        const hboSignal = HBO_AMPLITUDE * Math.sin(2 * Math.PI * HBO_FREQ_HZ * t + phaseOffset)
+        const freqOffset = [1.0, 1.3, 0.8, 1.5][ch]
+        const hboSignal = HBO_AMPLITUDE * Math.sin(2 * Math.PI * HBO_FREQ_HZ * freqOffset * t + phaseOffset)
 
         for (let wl = 0; wl < N_WAVELENGTHS; wl++) {
           const hboSensitivity = 0.5 + wl * 0.3

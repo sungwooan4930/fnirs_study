@@ -19,7 +19,7 @@
 .snr-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  gap: 36px;
   margin-bottom: 32px;
 }
 
@@ -27,25 +27,25 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 28px 30px;
+  padding: 52px 56px;
 }
 
 .channel-card.good { border-color: var(--success); }
 .channel-card.poor { border-color: var(--error); }
 
 .channel-label {
-  font-size: 1.2rem;
+  font-size: 2rem;
   font-weight: 700;
-  margin-bottom: 18px;
+  margin-bottom: 30px;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .status-badge {
-  font-size: 0.8rem;
+  font-size: 1.3rem;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 6px 16px;
   border-radius: 99px;
 }
 
@@ -65,41 +65,41 @@
   border: 1px solid var(--border);
 }
 
-.wl-bars { display: flex; flex-direction: column; gap: 14px; }
+.wl-bars { display: flex; flex-direction: column; gap: 26px; }
 
 .wl-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 20px;
 }
 
-.wl-label { font-size: 0.98rem; color: var(--text-muted); width: 58px; flex-shrink: 0; }
+.wl-label { font-size: 1.6rem; color: var(--text-muted); width: 96px; flex-shrink: 0; }
 
 .bar-track {
   flex: 1;
-  height: 20px;
+  height: 40px;
   background: var(--border);
-  border-radius: 10px;
+  border-radius: 20px;
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 10px;
+  border-radius: 20px;
   transition: width 0.15s, background 0.15s;
 }
 
-.bar-value { font-size: 0.98rem; width: 42px; text-align: right; }
+.bar-value { font-size: 1.6rem; width: 72px; text-align: right; }
 
 .btn-proceed {
   display: block;
   margin: 0 auto;
-  padding: 16px 64px;
+  padding: 22px 80px;
   background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 20px;
-  font-size: 1.2rem;
+  font-size: 1.6rem;
   font-weight: 700;
   font-family: 'Inter', system-ui, sans-serif;
   cursor: pointer;

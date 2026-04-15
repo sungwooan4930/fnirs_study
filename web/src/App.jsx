@@ -6,6 +6,7 @@ import TimeSeriesTab from './components/TimeSeriesTab'
 import BrainMapTab from './components/BrainMapTab'
 import ReportTab from './components/ReportTab'
 import ProfileStep from './components/ProfileStep'
+import ConnectionStep from './components/ConnectionStep'
 import './App.css'
 
 function useElapsed() {
@@ -59,6 +60,7 @@ function AppFlow() {
   const { userProfile, appPhase } = useApp()
 
   if (!userProfile) return <ProfileStep />
+  if (appPhase === 'connection') return <ConnectionStep />
   if (appPhase === 'calibration') return <CalibrationTab />
   if (appPhase === 'measuring') return <MeasuringView />
   if (appPhase === 'report') return (

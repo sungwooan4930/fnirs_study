@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import { useBLE } from '../hooks/useBLE'
 import { usePipeline } from '../hooks/usePipeline'
@@ -44,7 +44,7 @@ const STATUS_COLOR = {
 }
 
 export default function TopBar() {
-  const { bleStatus, setBleStatus, processedSample, pushSample, sessionData } = useApp()
+  const { bleStatus, setBleStatus, processedSample, pushSample, sessionData, bleActionsRef } = useApp()
 
   const { sendPacket } = usePipeline(pushSample)
 
@@ -53,6 +53,10 @@ export default function TopBar() {
   }, [sendPacket])
 
   const { connect, disconnect, isSimulate } = useBLE(onPacket, setBleStatus)
+
+  useEffect(() => {
+    bleActionsRef.current = { connect, disconnect }
+  }, [connect, disconnect])
 
   const ci = processedSample?.ci ?? 0
   const ciPercent = Math.round(ci * 100)

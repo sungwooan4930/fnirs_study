@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useRef } from 'react'
 
 const AppContext = createContext(null)
 
@@ -7,8 +7,8 @@ export function AppProvider({ children }) {
 
   const [userProfile, setUserProfile] = useState(null)  // { name, age }
 
-  // 앱 단계: 'calibration' | 'measuring' | 'report'
-  const [appPhase, setAppPhase] = useState('calibration')
+  // 앱 단계: 'connection' | 'calibration' | 'measuring' | 'report'
+  const [appPhase, setAppPhase] = useState('connection')
 
   const [calibrationDone, setCalibrationDone] = useState(false)
 
@@ -22,6 +22,11 @@ export function AppProvider({ children }) {
       return []
     }
   })
+
+  // BLE connect/disconnect를 ConnectionStep에서도 호출할 수 있도록 ref로 노출
+  const bleActionsRef = useRef({ connect: () => {}, disconnect: () => {} })
+  const bleConnect = useCallback(() => bleActionsRef.current.connect(), [])
+  const bleDisconnect = useCallback(() => bleActionsRef.current.disconnect(), [])
 
   const pushSample = useCallback((sample) => {
     setProcessedSample(sample)
@@ -48,6 +53,7 @@ export function AppProvider({ children }) {
       sessionData,
       pushSample,
       clearSession,
+      bleActionsRef, bleConnect, bleDisconnect,
     }}>
       {children}
     </AppContext.Provider>

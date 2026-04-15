@@ -1,0 +1,99 @@
+.conn-step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.conn-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px 56px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.conn-icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.conn-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.conn-desc {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.conn-status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 4px;
+}
+.conn-status-dot.idle      { background: var(--text-muted); }
+.conn-status-dot.connecting { background: var(--warning); animation: pulse 1s infinite; }
+.conn-status-dot.connected  { background: var(--success); }
+.conn-status-dot.error      { background: var(--error); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.conn-status-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: -8px;
+}
+
+.conn-btn {
+  margin-top: 8px;
+  padding: 14px 48px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+  width: 100%;
+}
+.conn-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.conn-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.conn-btn-proceed {
+  margin-top: 8px;
+  padding: 14px 48px;
+  background: var(--success);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  width: 100%;
+}
+.conn-btn-proceed:hover { opacity: 0.9; }
+
+.conn-error {
+  font-size: 0.82rem;
+  color: var(--error);
+}

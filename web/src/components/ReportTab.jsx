@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useApp } from '../context/AppContext'
+import BrainModelPNG from './BrainModel/BrainModelPNG'
+import { BRAIN_FRONT } from './BrainModel/brainViews'
 import './ReportTab.css'
 
 // 채널 → 뇌 부위 매핑
@@ -51,6 +53,33 @@ function buildAnalysis(avgs) {
       : '우측 전전두엽이 더 활발하게 반응한 패턴으로, 공간적·직관적 사고가 활발하게 이루어진 상태로 볼 수 있습니다.'
 
   return { leftText, rightText, dominance }
+}
+
+// 채널별 개별 분석 텍스트 (뇌 부위 박스용)
+const REGION_DETAIL = [
+  { name: '좌측 전두엽 전방', role: '언어 처리·논리적 사고' },
+  { name: '우측 전두엽 전방', role: '직관·창의적 사고' },
+  { name: '좌측 전두엽 후방', role: '작업 기억·계획 수립' },
+  { name: '우측 전두엽 후방', role: '공간 인식·정서 조절' },
+]
+
+function buildChannelAnalysis(avgs) {
+  const hboVals = avgs.map(a => a.hbo)
+  const mean = hboVals.reduce((s, v) => s + v, 0) / hboVals.length
+  const maxDev = Math.max(...hboVals.map(v => Math.abs(v - mean))) || 1
+
+  return avgs.map((avg, ch) => {
+    const rel = (avg.hbo - mean) / maxDev
+    const level = rel > 0.25 ? 'high' : rel < -0.25 ? 'low' : 'normal'
+    const detail = REGION_DETAIL[ch]
+    const text =
+      level === 'high'
+        ? `${detail.role}와 관련된 이 영역이 세션 중 활발하게 반응하였습니다. 다른 부위보다 혈류량이 더 많이 증가한 것으로 나타났습니다.`
+        : level === 'low'
+        ? `이 영역의 활성도는 상대적으로 낮았습니다. ${detail.role} 관련 부하가 다른 부위보다 적었던 것으로 볼 수 있습니다.`
+        : `${detail.role}와 관련된 이 영역이 안정적인 수준으로 고르게 활성화되었습니다.`
+    return { ...detail, level, text }
+  })
 }
 
 function formatDuration(sec) {
@@ -106,82 +135,41 @@ function CIChart({ data }) {
   )
 }
 
-// 뇌 맵 스냅샷 SVG
-function BrainSnapshot({ avgs }) {
-  const CH_SNAP = [
-    { id: 'rs1', cx: '40%', cy: '50%', r: '25%' },
-    { id: 'rs2', cx: '60%', cy: '50%', r: '22%' },
-    { id: 'rs3', cx: '40%', cy: '65%', r: '20%' },
-    { id: 'rs4', cx: '60%', cy: '65%', r: '18%' },
-  ]
-
-  function valToColor(val) {
-    const t = Math.max(0, Math.min(1, (val + 5) / 10))
-    if (t < 0.5) {
-      const f = t * 2
-      return `rgb(${Math.round(78 + 177 * f)},${Math.round(146 + 109 * f)},255)`
-    }
-    const f = (t - 0.5) * 2
-    const gb = Math.round(255 * (1 - f))
-    return `rgb(255,${gb},${gb})`
-  }
-
-  function valToOpacity(val) {
-    return 0.35 + Math.min(Math.abs(val) / 5, 1) * 0.35
-  }
-
+function RegionBox({ info, side }) {
+  const levelColor = { high: '#ef4444', low: '#4e92ff', normal: '#22c55e' }[info.level]
+  const levelText = { high: '활성도 높음', low: '활성도 낮음', normal: '안정적' }[info.level]
   return (
-    <div className="brain-snap-svg-wrap">
-      <svg viewBox="0 0 240 200" width="100%" style={{ display: 'block' }}>
-        <ellipse cx="120" cy="95" rx="100" ry="85" fill="#1e2130" stroke="#1f55f1" strokeWidth="1" opacity="0.6" />
-        <defs>
-          {CH_SNAP.map(({ id, cx, cy, r }, ch) => {
-            const color = valToColor(avgs[ch].hbo)
-            const opacity = valToOpacity(avgs[ch].hbo)
-            return (
-              <radialGradient key={id} id={id} cx={cx} cy={cy} r={r}>
-                <stop offset="0%"   stopColor={color} stopOpacity={opacity} />
-                <stop offset="100%" stopColor={color} stopOpacity={0} />
-              </radialGradient>
-            )
-          })}
-        </defs>
-        {CH_SNAP.map(({ id }) => (
-          <rect key={id} width="240" height="200" fill={`url(#${id})`} />
-        ))}
-        <text x="120" y="188" textAnchor="middle" fontSize="9" fill="#6b7280" fontFamily="system-ui">PFC · HbO</text>
-      </svg>
+    <div className={`rba-box rba-box-${side}`}>
+      <div className="rba-box-header">
+        <span className="rba-region">{info.name}</span>
+        <span className="rba-level" style={{ color: levelColor }}>{levelText}</span>
+      </div>
+      <p className="rba-text">{info.text}</p>
+      <div className="rba-role">{info.role}</div>
     </div>
   )
 }
 
-// 부위별 평균 바 (채널명 대신 뇌 부위명)
-function RegionAverages({ avgs }) {
-  function toWidth(v) { return Math.max(0, Math.min(100, (v / 5 + 1) * 50)) }
-
+function BrainRegionPanel({ avgs }) {
+  const channels = buildChannelAnalysis(avgs)
+  const values = avgs.map(a => a.hbo)
   return (
-    <div className="ch-avg-list">
-      {avgs.map((avg, ch) => (
-        <div key={ch} className="ch-avg-row">
-          <span className="ch-avg-label">{REGION_SHORT[ch]}</span>
-          <div className="ch-avg-bars">
-            <div className="ch-avg-item">
-              <span className="ch-type hbo">HbO</span>
-              <div className="ch-track">
-                <div className="ch-fill hbo" style={{ width: `${toWidth(avg.hbo)}%` }} />
-              </div>
-              <span className="ch-val">{avg.hbo >= 0 ? '+' : ''}{avg.hbo.toFixed(1)}</span>
-            </div>
-            <div className="ch-avg-item">
-              <span className="ch-type hbr">HbR</span>
-              <div className="ch-track">
-                <div className="ch-fill hbr" style={{ width: `${toWidth(avg.hbr)}%` }} />
-              </div>
-              <span className="ch-val">{avg.hbr >= 0 ? '+' : ''}{avg.hbr.toFixed(1)}</span>
-            </div>
-          </div>
+    <div className="rba-wrap">
+      <div className="rba-col">
+        <RegionBox info={channels[0]} side="left" />
+        <RegionBox info={channels[2]} side="left" />
+      </div>
+      <div className="rba-center">
+        <BrainModelPNG view={BRAIN_FRONT} values={values} />
+        <div className="rba-colorbar">
+          <div className="rba-colorbar-grad" />
+          <span>낮음 → 높음</span>
         </div>
-      ))}
+      </div>
+      <div className="rba-col">
+        <RegionBox info={channels[1]} side="right" />
+        <RegionBox info={channels[3]} side="right" />
+      </div>
     </div>
   )
 }
@@ -288,55 +276,12 @@ export default function ReportTab() {
           <CIChart data={snapshot} />
         </div>
 
-        {/* 뇌 맵 + 부위별 평균 */}
-        <div>
-          <div className="section-label">측정 결과 요약</div>
-          <div className="bottom-row">
-            <div className="brain-snap">
-              <div className="snap-title">뇌 맵 스냅샷</div>
-              <div className="snap-sub">전전두엽(PFC) 부위별 활성화 분포</div>
-              <BrainSnapshot avgs={avgs} />
-              <div className="snap-colorbar">
-                <div className="snap-colorbar-grad" />
-                <span>−5 → 0 → +5 μmol/L</span>
-              </div>
-            </div>
-            <div className="brain-snap">
-              <div className="snap-title">부위별 평균</div>
-              <div className="snap-sub">세션 전체 HbO/HbR 평균값</div>
-              <RegionAverages avgs={avgs} />
-            </div>
-          </div>
-        </div>
-
-        {/* 부위별 신호 분석 */}
+        {/* 전전두엽 부위별 분석 */}
         <div>
           <div className="section-label">전전두엽 부위별 분석</div>
-          <div className="analysis-card">
-            <div className="analysis-intro">
-              측정된 신호를 기반으로 전전두엽(PFC) 영역별 활성화 패턴을 분석한 결과입니다.
-              HbO 증가(↑)는 해당 영역의 혈류 증가 및 신경 활성화를, HbR 감소(↓)는 산소 소비 증가를 의미합니다.
-            </div>
-            <div className="analysis-items">
-              <div className="analysis-item">
-                <span className="analysis-tag tag-left">좌측 PFC</span>
-                <div className="analysis-text">{analysis.leftText}</div>
-              </div>
-              <div className="analysis-item">
-                <span className="analysis-tag tag-right">우측 PFC</span>
-                <div className="analysis-text">{analysis.rightText}</div>
-              </div>
-              <div className="analysis-item">
-                <span className="analysis-tag tag-overall">종합</span>
-                <div className="analysis-text">{analysis.dominance}</div>
-              </div>
-              <div className="analysis-item">
-                <span className="analysis-tag tag-note">참고</span>
-                <div className="analysis-text note">
-                  본 분석은 fNIRS 신호 기반 참고 정보이며, 임상적 진단에 활용할 수 없습니다.
-                </div>
-              </div>
-            </div>
+          <BrainRegionPanel avgs={avgs} />
+          <div className="analysis-note">
+            본 분석은 fNIRS 신호 기반 참고 정보이며, 임상적 진단에 활용할 수 없습니다.
           </div>
         </div>
       </div>
