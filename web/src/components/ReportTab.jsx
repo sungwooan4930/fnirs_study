@@ -1,7 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useApp } from '../context/AppContext'
 import BrainModelPNG from './BrainModel/BrainModelPNG'
 import { BRAIN_FRONT } from './BrainModel/brainViews'
+import ReportPDFTemplate from './ReportPDFTemplate'
+import { generatePDF } from '../lib/generatePDF'
 import './ReportTab.css'
 
 // 채널 → 뇌 부위 매핑
@@ -188,11 +191,27 @@ export default function ReportTab() {
 
   // 마운트 시점 스냅샷 고정 — 이후 실시간 변화 무시
   const [snapshot] = useState(() => sessionData)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const pdfRef = useRef(null)
 
   const score    = useMemo(() => calcScore(snapshot), [snapshot])
   const duration = useMemo(() => sessionDuration(snapshot), [snapshot])
   const avgs     = useMemo(() => channelAverages(snapshot), [snapshot])
   const analysis = useMemo(() => buildAnalysis(avgs), [avgs])
+  const channels = useMemo(() => buildChannelAnalysis(avgs), [avgs])
+
+  const handleDownloadPDF = useCallback(async () => {
+    if (!pdfRef.current || pdfLoading) return
+    setPdfLoading(true)
+    try {
+      const now = new Date()
+      const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`
+      const name = (userProfile?.name ?? 'report').replace(/\s/g, '_')
+      await generatePDF(pdfRef.current, `fnirs_${name}_${dateStr}.pdf`)
+    } finally {
+      setPdfLoading(false)
+    }
+  }, [pdfLoading, userProfile])
 
   const now = new Date()
   const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`
@@ -223,13 +242,16 @@ export default function ReportTab() {
       : '집중도 편차가 다소 높게 나타났습니다. 더 안정적인 측정 환경을 권장합니다.'
 
   return (
+    <>
     <div className="report">
       <div className="rpt-header">
         <div>
           <div className="rpt-title">집중도 분석 레포트</div>
           <div className="rpt-subtitle">fNIRS Monitor · 세션 종료 후 자동 생성</div>
         </div>
-        <button className="btn-pdf" onClick={() => window.print()}>↓ PDF 내보내기</button>
+        <button className="btn-pdf" onClick={handleDownloadPDF} disabled={pdfLoading}>
+          {pdfLoading ? '생성 중…' : '↓ PDF 내보내기'}
+        </button>
       </div>
 
       <div className="rpt-body">
@@ -295,5 +317,23 @@ export default function ReportTab() {
         </div>
       </div>
     </div>
+
+    {/* PDF 캡처용 숨겨진 A4 템플릿 — 항상 DOM에 있어야 ref가 유효 */}
+    {createPortal(
+      <div ref={pdfRef} style={{ position: 'fixed', top: -9999, left: 0, zIndex: -1, visibility: 'hidden' }}>
+        <ReportPDFTemplate
+          snapshot={snapshot}
+          userProfile={userProfile}
+          baseline={baseline}
+          score={score}
+          duration={duration}
+          avgs={avgs}
+          analysis={analysis}
+          channels={channels}
+        />
+      </div>,
+      document.body
+    )}
+    </>
   )
 }
