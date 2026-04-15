@@ -62,7 +62,11 @@ function AppFlow() {
 
   if (!userProfile) return <ProfileStep />
   if (appPhase === 'connection') return <ConnectionStep />
-  if (appPhase === 'calibration') return <CalibrationTab />
+  if (appPhase === 'calibration') return (
+    <div className="report-scroll-wrap">
+      <CalibrationTab />
+    </div>
+  )
   if (appPhase === 'baseline') return <BaselineStep />
   if (appPhase === 'measuring') return <MeasuringView />
   if (appPhase === 'report') return (
