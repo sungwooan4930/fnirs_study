@@ -63,6 +63,22 @@ export default function BaselineStep() {
     setAppPhase('measuring')
   }
 
+  const handleSkip = () => {
+    // 지금까지 수집된 샘플로 즉시 baseline 산출 (샘플 없으면 0)
+    const n = sessionData.length
+    if (n > 0) {
+      const hbo = [0, 1, 2, 3].map(ch =>
+        sessionData.reduce((s, d) => s + d.hbo[ch], 0) / n
+      )
+      const hbr = [0, 1, 2, 3].map(ch =>
+        sessionData.reduce((s, d) => s + d.hbr[ch], 0) / n
+      )
+      setBaseline({ hbo, hbr })
+    }
+    clearSession()
+    setAppPhase('measuring')
+  }
+
   const remaining = BASELINE_SEC - elapsed
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0')
   const ss = String(remaining % 60).padStart(2, '0')
@@ -90,6 +106,9 @@ export default function BaselineStep() {
             <div className="baseline-sample-count">
               수집된 샘플: {sessionData.length}
             </div>
+            <button className="baseline-skip-btn" onClick={handleSkip}>
+              건너뛰기
+            </button>
           </>
         ) : (
           <>

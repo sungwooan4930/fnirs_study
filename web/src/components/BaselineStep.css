@@ -103,3 +103,20 @@
   width: 100%;
 }
 .baseline-proceed-btn:hover { opacity: 0.9; }
+
+.baseline-skip-btn {
+  margin-top: 4px;
+  padding: 8px 28px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.baseline-skip-btn:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}

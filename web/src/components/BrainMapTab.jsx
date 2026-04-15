@@ -19,6 +19,14 @@ export default function BrainMapTab() {
   const baselineVals = mode === 'hbo' ? baseline.hbo : baseline.hbr
   const values = rawValues.map((v, i) => v - baselineVals[i])
 
+  // 집중도: 전전두엽 HbO 델타 평균으로 산출 (HbO 증가 = 인지 부하 상승)
+  const hboDeltas = processedSample
+    ? processedSample.hbo.map((v, i) => v - baseline.hbo[i])
+    : [0, 0, 0, 0]
+  const meanDelta = hboDeltas.reduce((s, v) => s + v, 0) / hboDeltas.length
+  const focusLevel = meanDelta > 0.3 ? '높음' : meanDelta > -0.1 ? '보통' : '낮음'
+  const focusClass = meanDelta > 0.3 ? 'focus-high' : meanDelta > -0.1 ? 'focus-mid' : 'focus-low'
+
   return (
     <div className="brainmap">
       <div className="bm-controls">
@@ -40,6 +48,13 @@ export default function BrainMapTab() {
             <button className={view3d === 'top'   ? 'btn-mode active' : 'btn-mode'} onClick={() => setView3d('top')}>Top</button>
           </>
         )}
+
+        <div className="bm-divider" />
+
+        {/* 집중도 */}
+        <div className={`focus-badge ${focusClass}`}>
+          집중도 <span className="focus-level">{focusLevel}</span>
+        </div>
 
         <div className="colorbar">
           <span>−5</span>

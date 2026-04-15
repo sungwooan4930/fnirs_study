@@ -95,3 +95,36 @@
   color: var(--text-muted);
   text-align: center;
 }
+
+/* 집중도 배지 */
+.focus-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  border-radius: 99px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid;
+  transition: background 0.4s, color 0.4s;
+}
+
+.focus-badge.focus-low {
+  background: rgba(78, 146, 255, 0.12);
+  color: #4e92ff;
+  border-color: rgba(78, 146, 255, 0.3);
+}
+.focus-badge.focus-mid {
+  background: rgba(161, 161, 170, 0.12);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.focus-badge.focus-high {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.focus-level {
+  font-weight: 700;
+}
