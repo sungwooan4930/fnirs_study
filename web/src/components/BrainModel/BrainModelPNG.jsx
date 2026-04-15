@@ -57,7 +57,7 @@ export default function BrainModelPNG({ view = BRAIN_FRONT, values = [0, 0, 0, 0
           <rect key={id} width="340" height="290" fill={`url(#png-grad-${id})`} />
         ))}
         {/* Reset 버튼 UI 가리기 */}
-        <rect x="100" y="256" width="140" height="34" fill="#000" />
+        <rect x="100" y="256" width="140" height="34" fill="white" fillOpacity="0.85" />
       </svg>
     </div>
   )

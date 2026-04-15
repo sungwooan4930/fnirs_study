@@ -49,13 +49,6 @@ export default function BrainMapTab() {
           </>
         )}
 
-        <div className="bm-divider" />
-
-        {/* 집중도 */}
-        <div className={`focus-badge ${focusClass}`}>
-          집중도 <span className="focus-level">{focusLevel}</span>
-        </div>
-
         <div className="colorbar">
           <span>−5</span>
           <div className="colorbar-gradient" />
@@ -71,6 +64,17 @@ export default function BrainMapTab() {
             <BrainModel3D values={values} view={view3d} />
           </Suspense>
         )}
+      </div>
+
+      {/* 집중도 — brain 바로 아래 대형 표시 */}
+      <div className={`focus-panel ${focusClass}`}>
+        <span className="focus-panel-label">집중도</span>
+        <span className="focus-panel-level">{focusLevel}</span>
+        <span className="focus-panel-sub">
+          {focusLevel === '높음' ? '전전두엽 활성도가 baseline보다 높습니다' :
+           focusLevel === '보통' ? '안정적인 전전두엽 활성 상태입니다' :
+           '전전두엽 활성도가 baseline보다 낮습니다'}
+        </span>
       </div>
 
       <p className="bm-caption">

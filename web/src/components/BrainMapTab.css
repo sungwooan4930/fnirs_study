@@ -96,35 +96,53 @@
   text-align: center;
 }
 
-/* 집중도 배지 */
-.focus-badge {
+/* 집중도 패널 — brain 바로 아래 대형 */
+.focus-panel {
+  width: 100%;
+  max-width: 960px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 14px;
-  border-radius: 99px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  border: 1px solid;
-  transition: background 0.4s, color 0.4s;
+  justify-content: center;
+  gap: 18px;
+  padding: 18px 32px;
+  border-radius: 16px;
+  border: 2px solid;
+  transition: background 0.5s, border-color 0.5s, color 0.5s;
 }
 
-.focus-badge.focus-low {
-  background: rgba(78, 146, 255, 0.12);
-  color: #4e92ff;
-  border-color: rgba(78, 146, 255, 0.3);
+.focus-panel.focus-low {
+  background: rgba(78, 122, 255, 0.08);
+  border-color: rgba(78, 122, 255, 0.35);
+  color: #3358d4;
 }
-.focus-badge.focus-mid {
-  background: rgba(161, 161, 170, 0.12);
-  color: var(--text-muted);
+.focus-panel.focus-mid {
+  background: rgba(107, 114, 128, 0.07);
   border-color: var(--border);
+  color: var(--text-muted);
 }
-.focus-badge.focus-high {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.3);
+.focus-panel.focus-high {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #c81e1e;
 }
 
-.focus-level {
-  font-weight: 700;
+.focus-panel-label {
+  font-size: 1rem;
+  font-weight: 600;
+  opacity: 0.7;
+  letter-spacing: 0.02em;
+}
+
+.focus-panel-level {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.focus-panel-sub {
+  font-size: 0.82rem;
+  opacity: 0.75;
+  line-height: 1.4;
+  max-width: 220px;
 }

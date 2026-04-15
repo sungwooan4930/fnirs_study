@@ -109,18 +109,18 @@ function CIChart({ data }) {
         <span className="ci-avg">평균 CI: {avgCI}%</span>
       </div>
       <svg width="100%" height="100" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-        <rect width={W} height={H} fill="#0f1117" rx="6" />
+        <rect width={W} height={H} fill="#eef1f9" rx="6" />
         {[25, 50, 75].map(y => (
-          <line key={y} x1="0" y1={y} x2={W} y2={y} stroke="#1e2130" strokeWidth="1" strokeDasharray="4,4" />
+          <line key={y} x1="0" y1={y} x2={W} y2={y} stroke="#dde2f0" strokeWidth="1" strokeDasharray="4,4" />
         ))}
         <defs>
           <linearGradient id="ci-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#1f55f1" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#1f55f1" stopOpacity="0" />
+            <stop offset="0%"   stopColor="#2755e8" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#2755e8" stopOpacity="0" />
           </linearGradient>
         </defs>
         <polygon points={polyPts} fill="url(#ci-grad)" />
-        <polyline points={pts} fill="none" stroke="#1f55f1" strokeWidth="2.5" />
+        <polyline points={pts} fill="none" stroke="#2755e8" strokeWidth="2.5" />
         <text x="6" y="22" fontSize="8" fill="#6b7280" fontFamily="system-ui">100%</text>
         <text x="6" y="47" fontSize="8" fill="#6b7280" fontFamily="system-ui">50%</text>
         <text x="6" y="97" fontSize="8" fill="#6b7280" fontFamily="system-ui">0%</text>
@@ -150,9 +150,18 @@ function RegionBox({ info, side }) {
   )
 }
 
-function BrainRegionPanel({ avgs }) {
+function BrainRegionPanel({ avgs, baselineHbo }) {
   const channels = buildChannelAnalysis(avgs)
-  const values = avgs.map(a => a.hbo)
+  // baseline 대비 델타 값으로 뇌 맵 색상 표현 (live 화면과 동일 기준)
+  const rawValues = avgs.map(a => a.hbo)
+  const values = baselineHbo
+    ? rawValues.map((v, i) => v - baselineHbo[i])
+    : (() => {
+        // baseline이 없으면 채널 간 상대 차이로 정규화
+        const mean = rawValues.reduce((s, v) => s + v, 0) / rawValues.length
+        const maxDev = Math.max(...rawValues.map(v => Math.abs(v - mean)), 0.001)
+        return rawValues.map(v => ((v - mean) / maxDev) * 3)
+      })()
   return (
     <div className="rba-wrap">
       <div className="rba-col">
@@ -175,7 +184,7 @@ function BrainRegionPanel({ avgs }) {
 }
 
 export default function ReportTab() {
-  const { sessionData, userProfile } = useApp()
+  const { sessionData, userProfile, baseline } = useApp()
 
   // 마운트 시점 스냅샷 고정 — 이후 실시간 변화 무시
   const [snapshot] = useState(() => sessionData)
@@ -279,7 +288,7 @@ export default function ReportTab() {
         {/* 전전두엽 부위별 분석 */}
         <div>
           <div className="section-label">전전두엽 부위별 분석</div>
-          <BrainRegionPanel avgs={avgs} />
+          <BrainRegionPanel avgs={avgs} baselineHbo={baseline.hbo} />
           <div className="analysis-note">
             본 분석은 fNIRS 신호 기반 참고 정보이며, 임상적 진단에 활용할 수 없습니다.
           </div>
