@@ -26,7 +26,9 @@ function valToOpacity(val) {
   return 0.35 + Math.min(t, 1) * 0.4
 }
 
-export default function BrainModelPNG({ view = BRAIN_FRONT, values = [0, 0, 0, 0] }) {
+const FOCUS_COLORS = { '높음': '#ef4444', '보통': '#9ca3af', '낮음': '#4e7aff' }
+
+export default function BrainModelPNG({ view = BRAIN_FRONT, values = [0, 0, 0, 0], focusLabel = null }) {
   return (
     <div style={{ position: 'relative', display: 'inline-block', width: '100%', maxWidth: 960 }}>
       <img
@@ -56,8 +58,20 @@ export default function BrainModelPNG({ view = BRAIN_FRONT, values = [0, 0, 0, 0
         {view.channels.map(({ id }) => (
           <rect key={id} width="340" height="290" fill={`url(#png-grad-${id})`} />
         ))}
-        {/* Reset 버튼 UI 가리기 */}
-        <rect x="100" y="256" width="140" height="34" fill="white" fillOpacity="0.85" />
+
+        {/* Reset 버튼 가리기 + 집중도 표시 */}
+        <rect x="100" y="256" width="140" height="34" fill="#000" rx="4" />
+        {focusLabel ? (
+          <>
+            <text x="170" y="268" fontSize="8" fill="#9ca3af" fontFamily="system-ui"
+                  textAnchor="middle">집중도</text>
+            <text x="170" y="283" fontSize="13" fontWeight="700" fontFamily="system-ui"
+                  textAnchor="middle"
+                  fill={FOCUS_COLORS[focusLabel] ?? '#ffffff'}>
+              {focusLabel}
+            </text>
+          </>
+        ) : null}
       </svg>
     </div>
   )

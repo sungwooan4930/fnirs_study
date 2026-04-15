@@ -25,7 +25,6 @@ export default function BrainMapTab() {
     : [0, 0, 0, 0]
   const meanDelta = hboDeltas.reduce((s, v) => s + v, 0) / hboDeltas.length
   const focusLevel = meanDelta > 0.3 ? '높음' : meanDelta > -0.1 ? '보통' : '낮음'
-  const focusClass = meanDelta > 0.3 ? 'focus-high' : meanDelta > -0.1 ? 'focus-mid' : 'focus-low'
 
   return (
     <div className="brainmap">
@@ -58,23 +57,12 @@ export default function BrainMapTab() {
 
       <div className="bm-wrap">
         {render === 'png' ? (
-          <BrainModelPNG view={BRAIN_FRONT} values={values} />
+          <BrainModelPNG view={BRAIN_FRONT} values={values} focusLabel={focusLevel} />
         ) : (
           <Suspense fallback={<div className="bm-3d-loading">3D 모델 로딩 중…</div>}>
             <BrainModel3D values={values} view={view3d} />
           </Suspense>
         )}
-      </div>
-
-      {/* 집중도 — brain 바로 아래 대형 표시 */}
-      <div className={`focus-panel ${focusClass}`}>
-        <span className="focus-panel-label">집중도</span>
-        <span className="focus-panel-level">{focusLevel}</span>
-        <span className="focus-panel-sub">
-          {focusLevel === '높음' ? '전전두엽 활성도가 baseline보다 높습니다' :
-           focusLevel === '보통' ? '안정적인 전전두엽 활성 상태입니다' :
-           '전전두엽 활성도가 baseline보다 낮습니다'}
-        </span>
       </div>
 
       <p className="bm-caption">
