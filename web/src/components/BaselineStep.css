@@ -1,0 +1,105 @@
+.baseline-step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.baseline-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px 56px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.baseline-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.baseline-desc {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.baseline-timer {
+  font-size: 4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+  line-height: 1;
+  margin: 8px 0;
+}
+
+.baseline-progress-track {
+  width: 100%;
+  height: 10px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.baseline-progress-fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--accent), var(--accent-2));
+  border-radius: 999px;
+  transition: width 0.5s linear;
+}
+
+.baseline-hint {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: -4px;
+}
+
+.baseline-sample-count {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* Done state */
+.baseline-done-icon {
+  font-size: 3.5rem;
+  line-height: 1;
+  color: var(--success);
+}
+
+.baseline-done-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--success);
+}
+
+.baseline-done-sub {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.baseline-proceed-btn {
+  margin-top: 8px;
+  padding: 14px 48px;
+  background: var(--success);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-family: 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  width: 100%;
+}
+.baseline-proceed-btn:hover { opacity: 0.9; }

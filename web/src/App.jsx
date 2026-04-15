@@ -7,6 +7,7 @@ import BrainMapTab from './components/BrainMapTab'
 import ReportTab from './components/ReportTab'
 import ProfileStep from './components/ProfileStep'
 import ConnectionStep from './components/ConnectionStep'
+import BaselineStep from './components/BaselineStep'
 import './App.css'
 
 function useElapsed() {
@@ -62,6 +63,7 @@ function AppFlow() {
   if (!userProfile) return <ProfileStep />
   if (appPhase === 'connection') return <ConnectionStep />
   if (appPhase === 'calibration') return <CalibrationTab />
+  if (appPhase === 'baseline') return <BaselineStep />
   if (appPhase === 'measuring') return <MeasuringView />
   if (appPhase === 'report') return (
     <div className="report-scroll-wrap">

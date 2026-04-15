@@ -7,10 +7,13 @@ export function AppProvider({ children }) {
 
   const [userProfile, setUserProfile] = useState(null)  // { name, age }
 
-  // 앱 단계: 'connection' | 'calibration' | 'measuring' | 'report'
+  // 앱 단계: 'connection' | 'calibration' | 'baseline' | 'measuring' | 'report'
   const [appPhase, setAppPhase] = useState('connection')
 
   const [calibrationDone, setCalibrationDone] = useState(false)
+
+  // baseline 측정 결과 — 채널별 평균 HbO/HbR (측정 중 델타 기준)
+  const [baseline, setBaseline] = useState({ hbo: [0, 0, 0, 0], hbr: [0, 0, 0, 0] })
 
   const [processedSample, setProcessedSample] = useState(null)
 
@@ -54,6 +57,7 @@ export function AppProvider({ children }) {
       pushSample,
       clearSession,
       bleActionsRef, bleConnect, bleDisconnect,
+      baseline, setBaseline,
     }}>
       {children}
     </AppContext.Provider>

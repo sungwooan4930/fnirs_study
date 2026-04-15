@@ -8,14 +8,16 @@ import './BrainMapTab.css'
 const BrainModel3D = lazy(() => import('./BrainModel/BrainModel3D'))
 
 export default function BrainMapTab() {
-  const { processedSample } = useApp()
+  const { processedSample, baseline } = useApp()
   const [mode, setMode] = useState('hbo')      // 'hbo' | 'hbr'
   const [render, setRender] = useState('png')  // 'png' | '3d'
   const [view3d, setView3d] = useState('front') // 'front' | 'top'
 
-  const values = processedSample
+  const rawValues = processedSample
     ? (mode === 'hbo' ? processedSample.hbo : processedSample.hbr)
     : [0, 0, 0, 0]
+  const baselineVals = mode === 'hbo' ? baseline.hbo : baseline.hbr
+  const values = rawValues.map((v, i) => v - baselineVals[i])
 
   return (
     <div className="brainmap">
@@ -42,7 +44,7 @@ export default function BrainMapTab() {
         <div className="colorbar">
           <span>−5</span>
           <div className="colorbar-gradient" />
-          <span>+5 μmol/L</span>
+          <span>+5</span>
         </div>
       </div>
 
@@ -57,7 +59,7 @@ export default function BrainMapTab() {
       </div>
 
       <p className="bm-caption">
-        전전두엽(PFC) {mode === 'hbo' ? 'HbO' : 'HbR'} 신호 강도 — Blue(음) → White(0) → Red(양)
+        전전두엽(PFC) {mode === 'hbo' ? 'HbO' : 'HbR'} — baseline 대비: Blue(↓낮음) → White(기준) → Red(↑높음)
         {render === '3d' && ' · 마우스로 회전/줌 가능'}
       </p>
     </div>

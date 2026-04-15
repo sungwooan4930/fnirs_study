@@ -91,9 +91,9 @@ export default function CalibrationTab() {
       <button
         className="btn-proceed"
         disabled={!allGood}
-        onClick={() => { setCalibrationDone(true); setAppPhase('measuring') }}
+        onClick={() => { setCalibrationDone(true); setAppPhase('baseline') }}
       >
-        측정 시작 ▶
+        기준선 측정 시작 ▶
       </button>
     </div>
   )
