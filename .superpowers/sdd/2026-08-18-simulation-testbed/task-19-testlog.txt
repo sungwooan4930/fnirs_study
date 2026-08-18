@@ -1,0 +1,21 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.2, pluggy-1.6.0 -- D:\Study_fNIRS\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+PySide6 6.7.0 -- Qt runtime 6.7.0 -- Qt compiled 6.7.0
+rootdir: D:\Study_fNIRS
+configfile: pytest.ini
+plugins: qt-4.5.0
+collecting ... collected 6 items
+
+tests/evaluation/test_validation_effect.py::test_t1_null_effect_stays_at_chance PASSED [ 16%]
+tests/evaluation/test_validation_effect.py::test_t1_null_holds_at_pilot_scale_too PASSED [ 33%]
+tests/evaluation/test_validation_effect.py::test_t2_effect_is_recovered_above_chance PASSED [ 50%]
+tests/evaluation/test_validation_effect.py::test_t2_accuracy_is_not_suspiciously_perfect PASSED [ 66%]
+tests/evaluation/test_validation_effect.py::test_t2_reports_worst_subject_not_just_mean PASSED [ 83%]
+tests/evaluation/test_validation_effect.py::test_t2_matches_recorded_baseline PASSED [100%]
+
+======================== 6 passed in 210.19s (0:03:30) ========================
+........................................................................ [ 42%]
+........................................................................ [ 85%]
+........................                                                 [100%]
+168 passed in 217.52s (0:03:37)

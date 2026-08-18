@@ -387,4 +387,39 @@ cd web && npm run dev
 - [ ] 승인 후 `superpowers:writing-plans`로 구현 계획 작성
 - [ ] "3수준 분류" 정의 확인 (스펙은 인지부하 3수준=n-back 0/2/3으로 가정)
 - [ ] 참가자 수 계획서 불일치 (100 vs 30) — 연구책임자 확인
+
+---
+
+## 2026-08-18 — Task 19: T1 널 테스트 + T2 효과 회복 (승인 기준) 통과
+
+### 완료
+- `config/experiments/pilot.yaml` — 계획서 스펙(EEG 1000 Hz, 12명, effect_size=0.8) 실행용 config 신규 작성
+- `config/experiments/null.yaml` — pilot과 동일하되 `effect_size: 0.0`만 다른 널 데이터 config
+- `tests/evaluation/test_validation_effect.py` — T1(널 테스트) 2건 + T2(효과 회복) 4건, 총 6개 `@pytest.mark.slow` 테스트
+- `tests/baselines/t2_pilot.json` — 파일럿 실행 관측값을 코드 실행으로 기록(손으로 채우지 않음), 회귀 테스트로 고정
+- `docs/specs/2026-08-18-simulation-testbed-design.md` §11.4 — 파일럿 관측 정확도로 갱신(미확정 항목 확정)
+
+### 파일럿 실행 관측값 (seed=42, EEG 1000 Hz, 12명, LOSO-CV)
+| 항목 | 값 |
+|------|-----|
+| chance level (3분류) | 0.3333 |
+| pooled_accuracy | 0.6542 |
+| accuracy_mean | 0.6542 |
+| accuracy_worst | 0.2960 (worst subject: sub-05) |
+| pooled 95% CI | (0.6420, 0.6662) |
+| binomtest_p | 0.0 (< 0.01) |
+
+널 데이터(effect_size=0.0)에서는 chance(0.3333)가 pooled 신뢰구간 안에 들고 binomtest_p > 0.05 — 파이프라인 전역에 누수가 없다는 근거.
+심은 효과(effect_size=0.8)에서는 chance를 유의하게 상회하되 98% 미만(0.6542) — LOSO에서 개인차가 있는 합성 데이터가 근사 완벽 정확도를 내지 않는다는 것도 함께 확인.
+
+### 성능 측정 (사용자 요청 — 규모 실측)
+- 파일럿 1회 실행: wall-clock 56.3초, tracemalloc peak 약 2.0GB — 사전 추정(EEG 1000Hz·12명·540초/피험자 ≈ 1.5GB)과 일치. 실행 가능한 규모로 확인, config 축소 없이 그대로 진행.
+- `test_validation_effect.py -m slow` 6개: 210.19초 (0:03:30)
+- 전체 스위트: 168 passed (기존 162 + 신규 6), 217.52초, 경고 0건
+
+### 계획서 연계
+목표 3 서브프로젝트 A+D의 승인 기준 중 T1·T2 통과. T3(누수 검출)·T4(개인차 스윕)는 다음 태스크.
+
+### 다음 단계
+T3(고의적 누수 → 가드 차단 시연), T4(개인차 스윕 → LOSO 단조 하락) 진행.
 - [ ] T2 정확도 범위 — 파일럿 관측 후 회귀 기준 고정

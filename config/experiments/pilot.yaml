@@ -1,0 +1,38 @@
+run_name: pilot
+seed: 42
+
+simulation:
+  n_subjects: 12
+  subject_variance: 0.5
+  effect_size: 0.8
+  lead_delta_s: 1.2
+  task:
+    nback_levels: [0, 2, 3]
+    block_duration_s: 60
+    n_blocks_per_level: 3
+    stim_interval_s: 2.0
+  eeg:   {n_channels: 30, sfreq_hz: 1000}
+  fnirs: {n_channels: 48, sfreq_hz: 10.4, hbr_coupling: -0.33}
+
+windowing:
+  window_s: 5.0
+  step_s: 1.0
+
+features:
+  extractor: minimal
+
+dataset:
+  targets: [cognitive_load]
+  lead_targets: [accuracy, response_latency]
+  modalities: [eeg, fnirs, behavior]
+  rt_bins: [0.5, 0.8]
+
+evaluation:
+  splitter: loso
+  model: logistic_regression
+  guards:
+    check_subject_overlap: true
+    check_window_overlap: true
+
+output:
+  results_dir: results

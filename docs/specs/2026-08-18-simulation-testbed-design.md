@@ -355,7 +355,11 @@ TDD로 진행한다 (`CLAUDE.md` §6). 특히 계약 계층은 **차단되어야
 2. **"3수준 분류"의 정의** — 이 스펙은 **인지부하 3수준(n-back 0/2/3에서 유도)**으로 가정한다.
    6차원 각각을 3수준으로 하는 것인지 확인 필요.
 3. **실장비 모델명·fNIRS 몽타주** — BIDS 라이터 완성에 필요. 이번엔 골격만.
-4. **T2의 구체적 정확도 범위** — 파일럿 실행 관측값으로 확정 후 회귀 기준으로 고정.
+4. **T2의 구체적 정확도 범위** — 확정. `config/experiments/pilot.yaml`(EEG 1000 Hz, 12명, effect_size=0.8, seed=42)
+   LOSO 실행 관측값: `pooled_accuracy = 0.6542`(chance 0.3333 대비), `accuracy_mean = 0.6542`,
+   `accuracy_worst = 0.2960`(worst subject: sub-05). `tests/baselines/t2_pilot.json`에 고정하고
+   `tests/evaluation/test_validation_effect.py::test_t2_matches_recorded_baseline`로 회귀 검증한다
+   (허용 오차 ±0.05). Task 19에서 측정.
 
 ---
 
