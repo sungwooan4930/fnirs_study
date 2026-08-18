@@ -67,3 +67,35 @@ def test_rejects_missing_required_section(tmp_path):
     bad = MINIMAL.replace("windowing: {window_s: 5.0, step_s: 1.0}\n", "")
     with pytest.raises(ConfigError, match="windowing"):
         load_config(_write(tmp_path, bad))
+
+
+def test_rejects_missing_nested_section(tmp_path):
+    """simulation은 있는데 simulation.eeg가 없는 config를 통과시키지 않는다.
+
+    예전에는 최상위 키만 검사해서 이런 config가 로더를 통과한 뒤 한참
+    뒤에 맨 KeyError로 죽었다 — 어느 config의 어느 경로가 문제인지
+    알려주지 않는 실패다.
+    """
+    bad = MINIMAL.replace("  eeg: {n_channels: 4, sfreq_hz: 100}\n", "")
+    with pytest.raises(ConfigError, match=r"missing required key 'simulation\.eeg'"):
+        load_config(_write(tmp_path, bad))
+
+
+def test_rejects_missing_nested_leaf(tmp_path):
+    bad = MINIMAL.replace(
+        "  guards: {check_subject_overlap: true, check_window_overlap: true}",
+        "  guards: {check_subject_overlap: true}",
+    )
+    with pytest.raises(
+        ConfigError,
+        match=r"missing required key 'evaluation\.guards\.check_window_overlap'",
+    ):
+        load_config(_write(tmp_path, bad))
+
+
+def test_rejects_missing_deep_task_key(tmp_path):
+    bad = MINIMAL.replace("    stim_interval_s: 2.0\n", "")
+    with pytest.raises(
+        ConfigError, match=r"missing required key 'simulation\.task\.stim_interval_s'"
+    ):
+        load_config(_write(tmp_path, bad))

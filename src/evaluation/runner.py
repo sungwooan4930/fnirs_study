@@ -21,7 +21,7 @@ import yaml
 from src.common.config import load_config
 from src.common.seeding import set_all_seeds
 from src.datasets.contract import WindowedDataset
-from src.datasets.features_minimal import extract_features
+from src.datasets.extractors import get_extractor
 from src.datasets.labels import build_labels
 from src.datasets.windowing import make_windows
 from src.evaluation.harness import run_folds
@@ -92,6 +92,9 @@ def build_dataset(cfg: dict, rng: np.random.Generator) -> tuple[WindowedDataset,
     ds_cfg = cfg["dataset"]
     lead_delta_s = float(cfg["simulation"]["lead_delta_s"])
 
+    extract_features = get_extractor(cfg["features"]["extractor"])
+    lead_targets = list(ds_cfg["lead_targets"])
+
     recordings = generate_dataset(cfg["simulation"], rng)
 
     feature_blocks: dict[str, list[np.ndarray]] = {}
@@ -106,6 +109,7 @@ def build_dataset(cfg: dict, rng: np.random.Generator) -> tuple[WindowedDataset,
             rec, windows,
             lead_delta_s=lead_delta_s,
             rt_bins=list(ds_cfg["rt_bins"]),
+            lead_targets=lead_targets,
         )
         n_dropped += int((~keep).sum())
 
@@ -134,6 +138,15 @@ def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
     if overrides:
         cfg = _deep_update(cfg, overrides)
 
+    targets = list(cfg["dataset"]["targets"])
+    if len(targets) != 1:
+        raise ValueError(
+            f"dataset.targets has {len(targets)} entries {targets}; multi-target "
+            "evaluation is not supported yet — 러너는 targets[0] 하나만 평가하고 "
+            "나머지를 조용히 버린다. 여러 타깃을 평가하려면 config를 나눠 "
+            "각각 실행하라"
+        )
+
     seed = int(cfg["seed"])
     rng = set_all_seeds(seed)
 
@@ -160,8 +173,22 @@ def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
 
     dataset, n_dropped = build_dataset(cfg, rng)
 
-    target = cfg["dataset"]["targets"][0]
-    n_classes = int(len(cfg["simulation"]["task"]["nback_levels"]))
+    target = targets[0]
+
+    # n_classes는 과제 config가 아니라 실제로 평가하는 라벨 배열에서 유도한다.
+    # len(nback_levels)로 두면 targets를 accuracy(이진)로 바꾸는 것만으로
+    # chance_level이 0.3333으로 기록되고 binomtest가 틀린 귀무가설을 쓰는데,
+    # 아무 오류도 나지 않는다 — config 변경이 CLAUDE.md 5.4 위반을
+    # 제조하는 셈이다.
+    class_labels = dataset.class_labels(target)
+    n_classes = int(len(class_labels))
+    expected = np.arange(n_classes)
+    if not np.array_equal(class_labels, expected):
+        raise ValueError(
+            f"target '{target}' has non-contiguous class labels "
+            f"{class_labels.tolist()}; chance level과 혼동행렬 축이 "
+            "0..n-1 정수 라벨을 전제한다"
+        )
 
     splitter = get_splitter(cfg["evaluation"]["splitter"], seed=seed)
     fold_results = run_folds(

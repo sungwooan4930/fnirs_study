@@ -2,6 +2,12 @@
 
 스키마에 정의되지 않은 키를 만나면 실행을 거부한다. 오타가 조용히
 기본값으로 흡수되어 재현 불가능한 결과로 이어지는 것을 막기 위함이다.
+
+같은 이유로 스키마에 있는 키가 **빠진** 경우도 거부한다. 중첩 리프까지
+전부 필수다. 예전에는 최상위 키만 검사해서 `simulation:`은 있는데
+`simulation.eeg:`가 없는 config가 로더를 통과한 뒤 한참 뒤에 맨
+`KeyError: 'eeg'`로 죽었다 — 어느 config의 어느 경로가 문제인지
+알려주지 않는 실패다.
 """
 
 from __future__ import annotations
@@ -16,7 +22,8 @@ class ConfigError(Exception):
     """config가 스키마를 위반했을 때 발생."""
 
 
-# dict면 하위 스키마, None이면 리프(값 검사는 하지 않음)
+# dict면 하위 스키마, None이면 리프(값 검사는 하지 않음).
+# 스키마에 적힌 키는 전부 필수다 — 선택적 키는 현재 없다.
 SCHEMA: dict[str, Any] = {
     "run_name": None,
     "seed": None,
@@ -50,13 +57,9 @@ SCHEMA: dict[str, Any] = {
     "output": {"results_dir": None},
 }
 
-REQUIRED_TOP = (
-    "run_name", "seed", "simulation", "windowing",
-    "features", "dataset", "evaluation", "output",
-)
-
 
 def _check_node(node: Any, schema: Any, path: str) -> None:
+    """스키마에 없는 키를 거부한다."""
     if schema is None:
         return
     if not isinstance(node, dict):
@@ -65,6 +68,17 @@ def _check_node(node: Any, schema: Any, path: str) -> None:
         if key not in schema:
             raise ConfigError(f"unknown key '{path}{key}'")
         _check_node(value, schema[key], f"{path}{key}.")
+
+
+def _check_required(node: Any, schema: Any, path: str) -> None:
+    """스키마에 있는 키가 빠졌는지 경로까지 밝혀 거부한다."""
+    if schema is None:
+        return
+    for key, sub in schema.items():
+        full = f"{path}{key}"
+        if not isinstance(node, dict) or key not in node:
+            raise ConfigError(f"missing required key '{full}'")
+        _check_required(node[key], sub, f"{full}.")
 
 
 def load_config(path: str | Path) -> dict:
@@ -77,10 +91,7 @@ def load_config(path: str | Path) -> dict:
         raise ConfigError(f"{path}: top level must be a mapping")
 
     _check_node(cfg, SCHEMA, "")
-
-    for key in REQUIRED_TOP:
-        if key not in cfg:
-            raise ConfigError(f"missing required key '{key}'")
+    _check_required(cfg, SCHEMA, "")
 
     if isinstance(cfg["seed"], bool) or not isinstance(cfg["seed"], int):
         raise ConfigError(f"seed must be int, got {type(cfg['seed']).__name__}")

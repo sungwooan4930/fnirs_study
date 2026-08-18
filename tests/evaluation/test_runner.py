@@ -68,6 +68,74 @@ def test_build_dataset_has_all_three_targets():
     assert ds.targets == ["accuracy", "cognitive_load", "response_latency"]
 
 
+def test_lead_targets_selects_which_lead_labels_are_built():
+    """dataset.lead_targets가 실제로 소비되어야 한다.
+
+    스키마에 있고 모든 config가 적어놓았는데 아무도 읽지 않으면,
+    오타나 잘못된 값이 조용히 무시된다 — 엄격 스키마를 둔 이유가 사라진다.
+    """
+    import copy
+
+    cfg = copy.deepcopy(BASE_CFG)
+    cfg["dataset"]["lead_targets"] = ["accuracy"]
+    ds, _ = build_dataset(cfg, set_all_seeds(0))
+    assert ds.targets == ["accuracy", "cognitive_load"]
+
+
+def test_unknown_lead_target_is_rejected():
+    import copy
+
+    cfg = copy.deepcopy(BASE_CFG)
+    cfg["dataset"]["lead_targets"] = ["accuracy", "bogus_target"]
+    with pytest.raises(ValueError, match="unknown lead target"):
+        build_dataset(cfg, set_all_seeds(0))
+
+
+def test_unknown_extractor_is_rejected():
+    """features.extractor가 실제로 추출기를 고른다.
+
+    읽히지 않는 키였을 때는 `extractor: real`로 바꿔도 최소 추출기가
+    돌면서 초록불이 떴다.
+    """
+    import copy
+
+    cfg = copy.deepcopy(BASE_CFG)
+    cfg["features"]["extractor"] = "real"
+    with pytest.raises(ValueError, match="unknown feature extractor"):
+        build_dataset(cfg, set_all_seeds(0))
+
+
+def test_multi_target_config_is_rejected(tmp_path):
+    """targets[1:]을 조용히 버리지 않는다."""
+    cfg = json.loads(json.dumps(BASE_CFG))
+    cfg["dataset"]["targets"] = ["cognitive_load", "accuracy"]
+    cfg["output"]["results_dir"] = str(tmp_path / "results")
+    p = tmp_path / "multi.yaml"
+    p.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    with pytest.raises(ValueError, match="multi-target evaluation is not supported"):
+        run_experiment(p)
+
+
+def test_chance_level_follows_the_evaluated_target(tmp_path):
+    """chance_level은 과제 config가 아니라 평가하는 라벨에서 나와야 한다.
+
+    n_classes = len(nback_levels)로 두면 이진 타깃(accuracy)을 평가해도
+    chance_level이 0.3333으로 기록되고 binomtest가 틀린 귀무가설을 쓴다.
+    오류도 나지 않으므로 config 한 줄이 CLAUDE.md 5.4 위반을 제조한다.
+    """
+    cfg = json.loads(json.dumps(BASE_CFG))
+    cfg["dataset"]["targets"] = ["accuracy"]
+    cfg["output"]["results_dir"] = str(tmp_path / "results")
+    p = tmp_path / "binary.yaml"
+    p.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+
+    out = run_experiment(p)
+    metrics = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["target"] == "accuracy"
+    assert metrics["chance_level"] == pytest.approx(0.5)
+    assert np.array(metrics["confusion"]).shape == (2, 2)
+
+
 def test_run_experiment_writes_all_artifacts(tmp_path):
     out = run_experiment(_cfg_file(tmp_path, tmp_path / "results"))
     for name in ("config.yaml", "env.json", "metrics.json", "per_fold.csv", "log.txt"):

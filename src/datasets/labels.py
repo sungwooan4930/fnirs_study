@@ -16,16 +16,39 @@ from __future__ import annotations
 import numpy as np
 
 
+#: 선행(lead) 타깃으로 만들 수 있는 라벨. config의 dataset.lead_targets는
+#: 이 집합의 부분집합이어야 한다.
+LEAD_TARGETS: tuple[str, ...] = ("accuracy", "response_latency")
+
+
 def build_labels(
     rec,
     windows,
     *,
     lead_delta_s: float,
     rt_bins: list[float],
+    lead_targets: list[str] | tuple[str, ...] = LEAD_TARGETS,
 ) -> tuple[dict[str, np.ndarray], np.ndarray]:
-    """창별 라벨과 유효 마스크를 만든다."""
+    """창별 라벨과 유효 마스크를 만든다.
+
+    `lead_targets`는 config의 `dataset.lead_targets`를 그대로 받는다.
+    요청한 선행 타깃만 만들고, 모르는 이름이 오면 실행을 거부한다 —
+    검증만 되고 아무도 읽지 않는 config 키를 남겨두면 오타가 조용히
+    무시되어 스키마를 엄격하게 만든 이유가 사라진다.
+
+    선행 타깃을 하나도 요청하지 않으면 "녹화 끝을 넘어 예측할 자극이
+    없다"는 제약 자체가 사라지므로 `keep`은 전부 True다.
+    """
     if lead_delta_s < 0:
         raise ValueError(f"lead_delta_s must be >= 0, got {lead_delta_s}")
+
+    lead_targets = tuple(lead_targets)
+    unknown = [t for t in lead_targets if t not in LEAD_TARGETS]
+    if unknown:
+        raise ValueError(
+            f"unknown lead target(s) {unknown}; expected a subset of "
+            f"{list(LEAD_TARGETS)}"
+        )
 
     n_win = len(windows.start_s)
     onsets = rec.behavior.onsets
@@ -45,9 +68,13 @@ def build_labels(
     accuracy[valid] = rec.behavior.correct[stim_idx]
     latency[valid] = np.digitize(rec.behavior.rt[stim_idx], bins=rt_bins)
 
-    labels = {
-        "cognitive_load": windows.load_level.astype(int),
-        "accuracy": accuracy,
-        "response_latency": latency,
-    }
+    labels = {"cognitive_load": windows.load_level.astype(int)}
+    if "accuracy" in lead_targets:
+        labels["accuracy"] = accuracy
+    if "response_latency" in lead_targets:
+        labels["response_latency"] = latency
+
+    if not lead_targets:
+        keep = np.ones(n_win, dtype=bool)
+
     return labels, keep
