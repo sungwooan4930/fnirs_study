@@ -67,7 +67,20 @@ def test_t2_reports_worst_subject_not_just_mean(tmp_path):
 
 @pytest.mark.slow
 def test_t2_matches_recorded_baseline(tmp_path):
-    """파일럿 관측값에서 크게 벗어나면 무언가 바뀐 것이다."""
+    """파일럿 관측값이 베이스라인에서 벗어나면 무언가 바뀐 것이다.
+
+    허용 오차가 0.005로 좁은 이유: 이 실행은 표본 노이즈를 흡수할 필요가
+    없다. `set_all_seeds`가 만드는 결정론적 Generator 덕분에 같은 시드의
+    `run_experiment`는 비트 단위로 재현된다(Task 18에서 확인) — 실행마다
+    달라지는 값이 아니다. 그러므로 이 허용 오차는 "정상적인 변동 범위"가
+    아니라 "무시해도 되는 부동소수점 마지막 자리 차이(플랫폼·numpy 빌드
+    간)"만을 위한 것이다. 0.05처럼 넓혀두면 T1의 신뢰구간 반폭(약
+    1.19%p, n=6000)보다 훨씬 둔감해져서, T1이라면 잡아낼 수준의 회귀(예:
+    특징 추출·스케일링 버그로 인한 3~4%p 이동)를 조용히 통과시킨다.
+    나중에 이 값을 다시 넓히고 싶다면, 그 근거가 "재현성이 깨졌다"여야지
+    "표본 노이즈"여서는 안 된다 — 후자라면 애초에 Task 18의 결론이
+    틀렸다는 뜻이므로 먼저 그것부터 재확인해야 한다.
+    """
     import pathlib
 
     baseline = json.loads(
@@ -75,7 +88,7 @@ def test_t2_matches_recorded_baseline(tmp_path):
     )
     m = _metrics("config/experiments/pilot.yaml", tmp_path)
     assert m["cv_method"] == baseline["cv_method"]
-    assert abs(m["pooled_accuracy"] - baseline["pooled_accuracy"]) < 0.05, (
+    assert abs(m["pooled_accuracy"] - baseline["pooled_accuracy"]) < 0.005, (
         f"파일럿 정확도가 베이스라인 {baseline['pooled_accuracy']:.3f}에서 "
         f"{m['pooled_accuracy']:.3f}로 이동했다"
     )
