@@ -499,3 +499,74 @@ PASSED(152.23s). 빠른 스위트 162 passed, 10 deselected(7.37s), 회귀 없�
   `test_t3b` docstring·실패 메시지에 위 근거를 그대로 기록
 - `.superpowers/sdd/2026-08-18-simulation-testbed/task-20-report.md` —
   보정 근거 추가 기록
+
+---
+
+## 2026-08-19 — Task 21: T4 개인차 스윕 — LOSO 단조 하락 확인, within-subject 견고성 확인 (목표 3 서브프로젝트 A+D 완료)
+
+### 완료
+- `tests/evaluation/test_validation_subject_variance.py` — T4(개인차 스윕) 4개
+  `@pytest.mark.slow` 테스트 신규 작성. `config/experiments/pilot.yaml`을
+  `subject_variance ∈ {0.0, 0.5, 2.0}` × `splitter ∈ {loso, within_subject}`로
+  스윕.
+
+### 결과 디렉토리 / 재현 정보
+| 항목 | 값 |
+|------|-----|
+| 결과 디렉토리 | `tmp_path`(pytest 임시 디렉토리, 테스트 종료 시 정리됨 — `results/`에 영구 산출물 없음) |
+| git commit | `a3a1a44`(이 로그 항목 직전 HEAD; 이 커밋으로 T4 테스트 파일과 함께 커밋됨) |
+| config | `config/experiments/pilot.yaml` (n_subjects=12, effect_size=0.8), override로 `simulation.subject_variance`·`evaluation.splitter`만 변경 |
+| 시드 | `42` (config 기본값, `set_all_seeds`로 numpy/random/torch 전부 고정) |
+| 데이터 범위 | sub-01 ~ sub-12 (파일럿 전체), n=6000 창/실행 |
+| **CV 방식** | 실행별로 `loso` 또는 `within_subject` — 표 안에서 절대 혼용 표기하지 않음 |
+| **chance level** | 0.3333 (3수준 분류) |
+| 누수 점검 | 본 태스크는 T3(Task 20)에서 이미 검증된 가드가 걸린 상태로 정상 실행. 별도 `leakage-check` 재실행은 하지 않음(범위: 개인차 스윕이지 새 평가 코드 경로가 아님) |
+
+### 측정값 — pooled_accuracy (LOSO vs within-subject)
+| `subject_variance` | LOSO | within-subject |
+|---|---|---|
+| 0.0 | 1.0000 | 0.9312 |
+| 0.5 | 0.6542 (0.654167 — Task 19·20 베이스라인과 정확히 일치) | 0.8827 |
+| 2.0 | 0.6225 | 0.8948 |
+
+- LOSO 단조 하락: 1.0000 ≥ 0.6542 ≥ 0.6225 — 성립. 하락폭(0.0→2.0) = 0.3775 (문턱 0.02 대비 크게 상회).
+- within-subject 견고성: 0.8948 > 0.9312−0.10(=0.8312) — 성립. 개인차를 0→2.0으로 4배 키워도
+  within-subject 정확도는 대체로 0.88~0.93 범위에 머무름(피험자 내부에서는 개인차가 상수이므로 예상대로).
+- `subject_variance=2.0`에서 within-subject(0.8948) > LOSO(0.6225) — 성립, 격차 0.2723.
+- `cv_method` 필드가 `loso`/`within_subject`로 각 실행마다 정확히 기록됨(혼용 없음) — 4번째 테스트로 확인.
+
+### 주목할 관측 — `subject_variance=0.0`에서 LOSO가 1.0000(근사 완벽)
+버그가 아니라 정의상 결과로 해석: 개인차 항을 0으로 두면 남겨진 테스트
+피험자의 신호 생성 과정이 훈련 피험자들과 통계적으로 동일해지고, LOSO가
+일반화해야 할 "개인차 분산" 자체가 사라진다. T2의 "LOSO 근사 완벽 =
+누수 의심"(`pooled_accuracy < 0.98`) 원칙은 `subject_variance=0.5`(파일럿
+기본값)에서만 검증된 것이므로 상충되지 않는다. 오히려 이 관측은 개인차
+항(`subject.theta`)이 LOSO 성능을 좌우하는 지배적 요인임을 강하게
+뒷받침한다 — 그것을 끄자 LOSO가 정확히 완벽해졌다.
+
+### 단조성 판정
+**깨지지 않았다.** 임계값(`0.02`, `0.10`)을 조정할 필요가 없었다 —
+관측된 여유폭(하락 0.3775, 견고성 여유 0.0636)이 문턱보다 훨씬 크다.
+`subject.theta`가 신호에 실제로 반영되고 있다는 근거로 충분하다고 판단.
+
+### 테스트
+- `test_validation_subject_variance.py -m slow`: **4 passed**, 333.55s (0:05:33)
+- 빠른 스위트(`-m "not slow"`): **162 passed, 14 deselected**, 8.17s — 회귀 없음
+- 상세 로그: `.superpowers/sdd/2026-08-18-simulation-testbed/task-21-testlog.txt`
+- 별도 측정 스크립트 실행값(테스트와 동일 config·시드로 재확인):
+  `.superpowers/sdd/2026-08-18-simulation-testbed/task-21-measurements.txt`
+
+### 계획서 연계
+목표 3 서브프로젝트 A+D 승인 기준(스펙 §12) 중 **T1~T4 전부 통과** —
+서브프로젝트 A+D 완료. 계획서 가설 2("동일 수행 수준에서도 개인 간
+전전두엽 활성도가 상이한 신경효율성 개인차")가 합성 데이터 생성기에
+실제로 반영되어 있고, 그로 인해 LOSO/within-subject 구분이 무의미해지지
+않는다는 것을 확인했다.
+
+### 다음 단계
+- [ ] 서브프로젝트 B(전처리 파이프라인: EEG PREP→필터→ASR→보간→에포크,
+  fNIRS SCI→웨이블릿→대역통과→mBLL→에포크) 착수
+- [ ] `src/simulation/components/artifacts/` 추가(눈깜빡임·EMG·모션·광량드리프트) —
+  B가 이를 제거하는지 검증하기 위해 필요
+- [ ] `src/datasets/features_minimal.py`를 실제 특징 추출기로 교체(시그니처 유지)
+- [ ] fNIRS HbR 시간 지연·개인/부위별 HRF·채널 간 공간 상관(스펙 §6.3 단순화 해소)
