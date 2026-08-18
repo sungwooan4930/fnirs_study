@@ -522,27 +522,55 @@ PASSED(152.23s). 빠른 스위트 162 passed, 10 deselected(7.37s), 회귀 없�
 | **chance level** | 0.3333 (3수준 분류) |
 | 누수 점검 | 본 태스크는 T3(Task 20)에서 이미 검증된 가드가 걸린 상태로 정상 실행. 별도 `leakage-check` 재실행은 하지 않음(범위: 개인차 스윕이지 새 평가 코드 경로가 아님) |
 
-### 측정값 — pooled_accuracy (LOSO vs within-subject)
-| `subject_variance` | LOSO | within-subject |
-|---|---|---|
-| 0.0 | 1.0000 | 0.9312 |
-| 0.5 | 0.6542 (0.654167 — Task 19·20 베이스라인과 정확히 일치) | 0.8827 |
-| 2.0 | 0.6225 | 0.8948 |
+### 측정값 — pooled_accuracy · accuracy_worst (LOSO vs within-subject)
+| `subject_variance` | splitter | pooled_accuracy | accuracy_worst | worst_fold_subjects |
+|---|---|---|---|---|
+| 0.0 | loso | 1.0000 | **1.0000** | `sub-01` |
+| 0.5 | loso | 0.6542 (0.654167 — Task 19·20 베이스라인과 정확히 일치) | 0.2960 | `sub-05` |
+| 2.0 | loso | 0.6225 | 0.3320 | `sub-08` |
+| 0.0 | within_subject | 0.9312 | 0.0000 | `sub-01` |
+| 0.5 | within_subject | 0.8827 | 0.0000 | `sub-02` |
+| 2.0 | within_subject | 0.8948 | 0.0000 | `sub-02` |
+
+(fix round 1: `accuracy_worst`·`worst_fold_subjects`는 재실행 없이 pytest가
+보존한 이전 세션의 `tmp_path`(`pytest-of-sungw/pytest-60`)에 남아 있던
+`metrics.json` 6개에서 읽었다 — 값 자체는 최초 테스트 실행 때 이미 계산돼
+있었다.)
 
 - LOSO 단조 하락: 1.0000 ≥ 0.6542 ≥ 0.6225 — 성립. 하락폭(0.0→2.0) = 0.3775 (문턱 0.02 대비 크게 상회).
 - within-subject 견고성: 0.8948 > 0.9312−0.10(=0.8312) — 성립. 개인차를 0→2.0으로 4배 키워도
   within-subject 정확도는 대체로 0.88~0.93 범위에 머무름(피험자 내부에서는 개인차가 상수이므로 예상대로).
+  다만 0.5→2.0에서 0.8827→0.8948로 소폭 **상승**한 점은 가설로만 기록한다: `behavior.py`의
+  `p_correct = clip(BASE_ACCURACY - ACCURACY_DROP*scale, 0.05, 0.99)`에서 `scale`에 곱해지는
+  `gain = 1.0 + subject.theta`가 커질수록 일부 피험자의 정오답이 클립 경계 쪽으로 몰려
+  사실상 결정론적이 되고, 그 결과 within-subject 분류가 더 쉬워질 수 있다는 추정이다 —
+  확인된 발견이 아니라 가설이며, 테스트는 끝점만 비교하므로 이 비단조성으로 실패하지 않는다.
 - `subject_variance=2.0`에서 within-subject(0.8948) > LOSO(0.6225) — 성립, 격차 0.2723.
 - `cv_method` 필드가 `loso`/`within_subject`로 각 실행마다 정확히 기록됨(혼용 없음) — 4번째 테스트로 확인.
 
-### 주목할 관측 — `subject_variance=0.0`에서 LOSO가 1.0000(근사 완벽)
-버그가 아니라 정의상 결과로 해석: 개인차 항을 0으로 두면 남겨진 테스트
-피험자의 신호 생성 과정이 훈련 피험자들과 통계적으로 동일해지고, LOSO가
-일반화해야 할 "개인차 분산" 자체가 사라진다. T2의 "LOSO 근사 완벽 =
-누수 의심"(`pooled_accuracy < 0.98`) 원칙은 `subject_variance=0.5`(파일럿
-기본값)에서만 검증된 것이므로 상충되지 않는다. 오히려 이 관측은 개인차
-항(`subject.theta`)이 LOSO 성능을 좌우하는 지배적 요인임을 강하게
-뒷받침한다 — 그것을 끄자 LOSO가 정확히 완벽해졌다.
+### 주목할 관측 1 — `subject_variance=0.0`에서 LOSO가 1.0000, **worst fold도 1.0000**
+pooled 평균만으로는 "일부 피험자가 끌어올린다"는 대안 설명을 배제할 수
+없었지만, `accuracy_worst=1.0000`이고 `worst_fold_subjects=['sub-01']`
+하나뿐이라는 것은 — LOSO는 피험자마다 1개씩 총 12개 fold를 도므로 —
+**12개 fold 전부가 예외 없이 완벽했다**는 뜻이다. 이는 버그가 아니라
+정의상 결과로 해석된다: 개인차 항을 0으로 두면 남겨진 테스트 피험자의
+신호 생성 과정이 훈련 피험자들과 통계적으로 동일해지고, LOSO가
+일반화해야 할 "개인차 분산" 자체가 사라진다. 구조적 누수였다면 T1과
+같은 코드 경로(분할·스케일링)를 공유하므로 T1도 완벽에 가깝게 나왔어야
+하는데 T1은 chance 신뢰구간 안에 머물렀다 — 즉 이 완벽함은
+`subject_variance=0`에서만 켜지는 메커니즘이지 상시적 평가 코드 누수가
+아니다. T2의 "LOSO 근사 완벽 = 누수 의심"(`pooled_accuracy < 0.98`)
+원칙은 `subject_variance=0.5`(파일럿 기본값, 개인차가 존재하는 조건)
+에서만 검증된 것이므로 상충되지 않는다. worst-fold 수치는 이 결론을
+pooled 평균보다 훨씬 결정적으로 뒷받침한다 — 그것을 끄자 LOSO가 12개
+fold 전부에서 정확히 완벽해졌다.
+
+### 주목할 관측 2 — within-subject의 `accuracy_worst`가 세 조건 모두 0.0000
+`sub-01`(variance 0.0) 또는 `sub-02`(variance 0.5·2.0)의 fold 하나가 매번
+정확히 0%였다. pooled 값(0.88~0.93)에는 거의 영향이 없어 해당 fold의
+표본 수가 작다고 추정된다. 이번 태스크의 통과 기준·임계값·config에는
+영향이 없어 그대로 두었으며, "within-subject 개별 fold 분산이 왜 큰가"는
+서브프로젝트 B 착수 시 조사 후보로 남긴다.
 
 ### 단조성 판정
 **깨지지 않았다.** 임계값(`0.02`, `0.10`)을 조정할 필요가 없었다 —
@@ -555,6 +583,12 @@ PASSED(152.23s). 빠른 스위트 162 passed, 10 deselected(7.37s), 회귀 없�
 - 상세 로그: `.superpowers/sdd/2026-08-18-simulation-testbed/task-21-testlog.txt`
 - 별도 측정 스크립트 실행값(테스트와 동일 config·시드로 재확인):
   `.superpowers/sdd/2026-08-18-simulation-testbed/task-21-measurements.txt`
+- **fix round 1 — 전체 스위트(`pytest -v`) 첫 통합 실행**: 이전까지 T1(Task 19)·
+  T3(Task 20)·T4(본 태스크)는 각자의 세션에서만 개별 확인됐고, 현재 HEAD에서
+  전부를 한 번에 초록으로 확인한 적이 없었다. `.venv/Scripts/pytest.exe -v`
+  (slow 포함, addopts로 제외되지 않음)를 실행: **176 passed in 911.81s
+  (0:15:11)**. T1·T2·T3·T4 slow 테스트 전부와 fast 162개가 같은 세션에서
+  모두 통과. 상세 로그: `.superpowers/sdd/2026-08-18-simulation-testbed/task-21-fullsuite.txt`.
 
 ### 계획서 연계
 목표 3 서브프로젝트 A+D 승인 기준(스펙 §12) 중 **T1~T4 전부 통과** —
