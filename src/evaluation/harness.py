@@ -12,6 +12,11 @@ within-subject CV는 같은 피험자가 train/test 양쪽에 있는 것이 설�
 가드는 이 예외와 무관하게 항상 실행된다: within-subject 분할은 시행
 경계를 따라 나뉘므로 창이 경계를 넘지 않아 가드를 통과하고, 의도적으로
 누수를 일으키는 window_random 분할기는 여기서 걸린다.
+
+단일 클래스 fold는 train 쪽뿐 아니라 **test 쪽도** 거부한다. 스펙 §9의
+문구는 "특정 fold에서 클래스가 1개뿐 → 실행 거부"이지 "train fold"가
+아니다. test가 단일 클래스면 그 fold의 정확도는 판별력이 아니라 다수
+클래스 예측률이 되어, 평균과 최악 피험자 지표를 동시에 오염시킨다.
 """
 
 from __future__ import annotations
@@ -64,7 +69,7 @@ def run_folds(
 
     allows_same_subject = getattr(splitter, "allows_same_subject", False)
 
-    for fold in dataset.iter_folds(splitter):
+    for fold in dataset.iter_folds(splitter, stratify_target=target):
         train_subj = fold.train.subject_ids()
         test_subj = fold.test.subject_ids()
 
@@ -83,10 +88,19 @@ def run_folds(
                 f"'{target}'; accuracy would be meaningless"
             )
 
+        y_true = fold.test.y(target)
+        if len(np.unique(y_true)) < 2:
+            raise ValueError(
+                f"fold {fold.fold_id} test has a single class for target "
+                f"'{target}'; accuracy would be meaningless. "
+                "스펙 §9는 'train fold'가 아니라 'fold에서 클래스가 1개뿐'이면 "
+                "실행을 거부하라고 적고 있다 — test가 단일 클래스인 fold의 "
+                "정확도는 다수 클래스 예측률일 뿐 판별력이 아니다."
+            )
+
         model = make_model(model_name, seed)
         model.fit(fold.train.X(modalities), y_train)
 
-        y_true = fold.test.y(target)
         y_pred = model.predict(fold.test.X(modalities))
 
         results.append(

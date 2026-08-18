@@ -108,6 +108,31 @@ def test_single_class_fold_is_rejected():
         )
 
 
+def test_single_class_test_fold_is_rejected():
+    """test가 단일 클래스인 fold도 거부한다 (스펙 §9는 'fold'라고 적혀 있다).
+
+    sub-01·sub-02는 두 클래스를 갖고 sub-03은 클래스 0만 갖는다. LOSO에서
+    sub-03이 test인 fold는 train이 멀쩡하므로 train 쪽 검사만으로는 통과하고,
+    그 fold의 정확도는 "다수 클래스를 얼마나 맞혔는가"가 되어 평균과
+    accuracy_worst를 동시에 오염시킨다.
+    """
+    y = np.array([0] * 5 + [1] * 5 + [0] * 5 + [1] * 5 + [0] * 10)
+    ds = WindowedDataset(
+        X={"eeg": np.random.default_rng(0).normal(size=(30, 3))},
+        y={"cognitive_load": y},
+        subject_ids=np.array(["sub-01"] * 10 + ["sub-02"] * 10 + ["sub-03"] * 10),
+        window_times=np.column_stack(
+            [np.arange(30, dtype=float), np.arange(30, dtype=float) + 5.0]
+        ),
+        trial_ids=np.arange(30) // 5,
+    )
+    with pytest.raises(ValueError, match="test has a single class"):
+        run_folds(
+            ds, get_splitter("loso"), target="cognitive_load",
+            modalities=["eeg"], guards=GUARDS_ON, seed=0,
+        )
+
+
 def make_block_dataset(n_subjects=4, n_trials=3, n_per_trial=10, seed=0):
     """Dataset whose trial blocks are separated by a wide time gap.
 

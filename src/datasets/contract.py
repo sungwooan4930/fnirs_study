@@ -32,9 +32,19 @@ class Splitter(Protocol):
     allows_same_subject: ClassVar[bool]
 
     def split(
-        self, subject_ids: np.ndarray, trial_ids: np.ndarray
+        self,
+        subject_ids: np.ndarray,
+        trial_ids: np.ndarray,
+        labels: np.ndarray | None = None,
     ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
-        """(train_idx, test_idx) 인덱스 쌍을 fold마다 하나씩 내놓는다."""
+        """(train_idx, test_idx) 인덱스 쌍을 fold마다 하나씩 내놓는다.
+
+        `labels`는 층화(stratification)가 필요한 분할기만 쓴다. 라벨을
+        분할에 쓰는 것은 누수가 아니다 — 여기 들어오는 라벨은 과제 설계
+        (n-back 수준)에서 나온 사전 확정 정보이고, sklearn의
+        `StratifiedKFold`가 y를 쓰는 것과 같은 용법이다. 모델 학습은
+        여전히 train fold 안에서만 일어난다.
+        """
         ...
 
 
@@ -162,18 +172,43 @@ class WindowedDataset:
     def get_trial_ids(self) -> np.ndarray:
         return self._trial_ids.copy()
 
-    def iter_folds(self, splitter: Splitter) -> Iterator[FoldView]:
+    def class_labels(self, target: str) -> np.ndarray:
+        """타깃의 고유 클래스 목록.
+
+        chance level·혼동행렬 라벨 축을 실제 평가 대상에서 유도하기 위한
+        메타데이터다. 행 단위 라벨은 여전히 노출하지 않으므로 계약이
+        막으려는 것(전역 fit)은 그대로 막힌다.
+        """
+        if target not in self._y:
+            raise KeyError(f"unknown target '{target}'; have {sorted(self._y)}")
+        return np.unique(self._y[target])
+
+    def iter_folds(
+        self, splitter: Splitter, *, stratify_target: str | None = None
+    ) -> Iterator[FoldView]:
         """분할기가 내놓는 fold를 뷰로 감싸 하나씩 내보낸다.
 
         데이터에 접근하는 유일한 경로다.
 
-        splitter.split(subject_ids, trial_ids)를 위치 인자 순서 그대로
-        호출한다 (피험자 ID가 먼저, 시행 ID가 다음). 분할기는 fold마다
-        (train_idx, test_idx) 인덱스 쌍을 하나씩 내놓아야 한다.
+        splitter.split(subject_ids, trial_ids[, labels])를 위치 인자 순서
+        그대로 호출한다 (피험자 ID가 먼저, 시행 ID가 다음). `stratify_target`을
+        주면 그 타깃의 라벨 배열을 세 번째 인자로 함께 넘긴다 — 층화
+        분할기(within_subject)가 블록을 라벨별로 배정하는 데 쓴다.
+        분할기는 fold마다 (train_idx, test_idx) 인덱스 쌍을 하나씩
+        내놓아야 한다.
         """
-        for fold_id, (train_idx, test_idx) in enumerate(
-            splitter.split(self._subject_ids, self._trial_ids)
-        ):
+        if stratify_target is None:
+            pairs = splitter.split(self._subject_ids, self._trial_ids)
+        else:
+            if stratify_target not in self._y:
+                raise KeyError(
+                    f"unknown target '{stratify_target}'; have {sorted(self._y)}"
+                )
+            pairs = splitter.split(
+                self._subject_ids, self._trial_ids, self._y[stratify_target]
+            )
+
+        for fold_id, (train_idx, test_idx) in enumerate(pairs):
             yield FoldView(
                 fold_id=fold_id,
                 train=TrainView(self, np.asarray(train_idx), "train"),
