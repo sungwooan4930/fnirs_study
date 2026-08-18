@@ -1,0 +1,20 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.2, pluggy-1.6.0 -- D:\Study_fNIRS\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+PySide6 6.7.0 -- Qt runtime 6.7.0 -- Qt compiled 6.7.0
+rootdir: D:\Study_fNIRS
+configfile: pytest.ini
+plugins: qt-4.5.0
+collecting ... collected 7 items
+
+tests/simulation/test_eeg_erp.py::test_output_shape PASSED               [ 14%]
+tests/simulation/test_eeg_erp.py::test_no_nans PASSED                    [ 28%]
+tests/simulation/test_eeg_erp.py::test_signal_is_near_zero_between_stimuli PASSED [ 42%]
+tests/simulation/test_eeg_erp.py::test_p300_is_positive_deflection PASSED [ 57%]
+tests/simulation/test_eeg_erp.py::test_p300_amplitude_decreases_with_load PASSED [ 71%]
+tests/simulation/test_eeg_erp.py::test_zero_effect_size_removes_load_modulation PASSED [ 85%]
+tests/simulation/test_eeg_erp.py::test_unmodulated_channels_are_silent PASSED [100%]
+
+============================== 7 passed in 0.17s ==============================
+...........................................                              [100%]
+43 passed in 1.56s
