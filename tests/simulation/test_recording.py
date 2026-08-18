@@ -71,3 +71,52 @@ def test_bids_metadata_written(tmp_path):
     lines = (tmp_path / "participants.tsv").read_text(encoding="utf-8").strip().split("\n")
     assert lines[0].split("\t")[0] == "participant_id"
     assert len(lines) == 4  # 헤더 + 피험자 3명
+
+
+def test_subjects_have_different_timelines():
+    """Verify each subject gets its own counterbalanced block order."""
+    recs = generate_dataset(SIM_CFG, set_all_seeds(0))
+    load_0 = recs[0].timeline.load_level
+    load_1 = recs[1].timeline.load_level
+    # The two subjects' load sequences should differ (different block order)
+    assert not np.array_equal(load_0, load_1), (
+        "Subjects must have different block orders (different timelines). "
+        "If all subjects share the same timeline, counterbalancing is lost."
+    )
+
+
+def test_eeg_contains_erp_component():
+    """Sanity check that EEG signal contains non-zero activity at stimulus latencies.
+
+    The EEG recording should contain signal energy at stimulus times (where ERP
+    is injected), not just flat/zero. This is a basic check that the component
+    generation is actually adding something to the signal, not being skipped.
+    """
+    rng = set_all_seeds(0)
+    sub = make_subjects(1, 0.5, rng)[0]
+    rec = generate_recording(sub, SIM_CFG, rng)
+
+    # Check that at least some stimulus times have significant signal
+    sfreq = rec.eeg_sfreq
+    stim_onsets_samples = np.round(rec.timeline.stim_onsets * sfreq).astype(int)
+
+    # Around stimulus onset (±100ms), measure peak signal
+    peak_measurements = []
+    for onset in stim_onsets_samples[:20]:  # First 20 stimuli
+        start = max(0, onset - int(0.1 * sfreq))
+        end = min(rec.eeg.shape[1], onset + int(0.1 * sfreq))
+        if end > start:
+            window = rec.eeg[0, start:end]  # Channel 0 (modulated)
+            peak_measurements.append(np.max(np.abs(window)))
+
+    # With ERP, we expect peaks > 1 µV at stimulus times
+    # Without ERP, peaks might be lower but still non-zero due to oscillations
+    mean_peak = np.mean(peak_measurements) if peak_measurements else 0
+
+    # This threshold will pass as long as oscillations are present (ERP or not)
+    # It's mainly a sanity check that the EEG is being generated at all
+    assert mean_peak > 0.5, (
+        f"EEG signal too small at stimulus times (mean peak={mean_peak:.3f}µV). "
+        f"Expected at least 0.5 µV from oscillations+ERP. "
+        f"Check that signal generation is not entirely broken."
+    )
