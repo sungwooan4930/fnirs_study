@@ -29,14 +29,25 @@ def test_all_load_levels_appear_equally_often():
     assert counts[0] == counts[1] == counts[2]
 
 
-def test_block_order_is_shuffled_not_sorted():
-    # 카운터밸런스: 블록 순서가 0,0,1,1,2,2 처럼 정렬돼 있으면 안 된다
-    orders = set()
-    for seed in range(10):
+def test_block_order_distribution_is_balanced():
+    # 카운터밸런스: 첫 블록에서 레벨 분포가 균형잡혀야 한다.
+    # 30개 시드에서 모든 레벨이 최소 1회 이상 나타나고,
+    # 어느 레벨도 60% 이상 차지하지 않아야 한다.
+    first_levels = []
+    for seed in range(30):
         tl = build_timeline(TASK_CFG, set_all_seeds(seed))
-        first_of_each_block = tl.load_level[:: int(30 * STATE_SFREQ)]
-        orders.add(tuple(first_of_each_block))
-    assert len(orders) > 1
+        first_level = tl.load_level[0]
+        first_levels.append(first_level)
+
+    first_levels = np.array(first_levels)
+    counts = np.bincount(first_levels, minlength=3)
+
+    # 모든 레벨이 최소 1회 이상 나타나야 함
+    assert np.all(counts > 0), f"Some levels never appeared first: {counts}"
+
+    # 어느 레벨도 60% 이상을 차지하면 안 됨 (편향 방지)
+    max_fraction = np.max(counts) / len(first_levels)
+    assert max_fraction < 0.6, f"Level over-represented: {counts}, fraction={max_fraction}"
 
 
 def test_fatigue_increases_monotonically():
@@ -68,3 +79,21 @@ def test_load_at_uses_step_interpolation():
 def test_load_at_clamps_beyond_end():
     tl = build_timeline(TASK_CFG, set_all_seeds(0))
     assert tl.load_at(np.array([tl.duration_s + 100.0]))[0] == tl.load_level[-1]
+
+
+def test_arrays_stay_same_length_for_non_integral_block_duration():
+    # 배열 길이 불변: 블록 지속시간이 정수배가 아니어도 모든 배열이 같은 길이여야 한다.
+    # 이는 duration_s가 샘플 그리드로부터 도출되어야 함을 보장한다.
+    cfg = {
+        "nback_levels": [0, 2, 3],
+        "block_duration_s": 20.05,  # 비정수 → 샘플링 결과도 비정수
+        "n_blocks_per_level": 2,
+        "stim_interval_s": 2.0,
+    }
+    tl = build_timeline(cfg, set_all_seeds(42))
+    assert len(tl.t) == len(tl.load_level), \
+        f"t and load_level length mismatch: {len(tl.t)} vs {len(tl.load_level)}"
+    assert len(tl.t) == len(tl.fatigue), \
+        f"t and fatigue length mismatch: {len(tl.t)} vs {len(tl.fatigue)}"
+    assert len(tl.t) == len(tl.trial_id), \
+        f"t and trial_id length mismatch: {len(tl.t)} vs {len(tl.trial_id)}"

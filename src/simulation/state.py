@@ -48,9 +48,9 @@ def build_timeline(task_cfg: dict, rng: np.random.Generator) -> CognitiveStateTi
     rng.shuffle(block_levels)
 
     n_blocks = len(block_levels)
-    duration_s = n_blocks * block_s
-    n_samples = int(round(duration_s * STATE_SFREQ))
     samples_per_block = int(round(block_s * STATE_SFREQ))
+    n_samples = n_blocks * samples_per_block
+    duration_s = n_samples / STATE_SFREQ
 
     t = np.arange(n_samples) / STATE_SFREQ
     load_level = np.repeat(block_levels, samples_per_block).astype(int)
