@@ -59,9 +59,14 @@ class WithinSubjectSplitter:
         for subject in np.unique(subject_ids):
             rows = np.flatnonzero(subject_ids == subject)
             trials = trial_ids[rows]
-            n_splits = min(self.n_splits, len(np.unique(trials)))
-            if n_splits < 2:
-                continue
+            n_unique_trials = len(np.unique(trials))
+            if n_unique_trials < 2:
+                raise ValueError(
+                    f"subject '{subject}' has only {n_unique_trials} unique "
+                    "trial(s); within-subject cross-validation needs at "
+                    "least 2 trials per subject"
+                )
+            n_splits = min(self.n_splits, n_unique_trials)
             for tr, te in GroupKFold(n_splits=n_splits).split(
                 np.zeros(len(rows)), groups=trials
             ):

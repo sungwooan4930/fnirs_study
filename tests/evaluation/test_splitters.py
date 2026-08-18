@@ -62,3 +62,10 @@ def test_within_subject_allows_same_subject_is_true():
 
 def test_window_random_allows_same_subject_is_false():
     assert get_splitter("window_random").allows_same_subject is False
+
+
+def test_within_subject_raises_on_subject_with_single_trial():
+    subj = np.array(["sub-01"] * 4 + ["sub-02"] * 4)
+    trial = np.array([0, 0, 0, 0] + [0, 1, 0, 1])
+    with pytest.raises(ValueError, match="within-subject cross-validation needs at least 2 trials"):
+        list(get_splitter("within_subject").split(subj, trial))

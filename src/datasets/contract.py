@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 import numpy as np
 
@@ -26,6 +26,10 @@ class LeakageError(RuntimeError):
 
 class Splitter(Protocol):
     """분할기 규약. iter_folds가 기대하는 호출 형태다."""
+
+    #: 같은 피험자가 train과 test에 동시에 나타나도 되는 CV 방식인지.
+    #: 생략하면 False로 간주한다(피험자 중첩은 위반). within-subject 계열만 True.
+    allows_same_subject: ClassVar[bool]
 
     def split(
         self, subject_ids: np.ndarray, trial_ids: np.ndarray
