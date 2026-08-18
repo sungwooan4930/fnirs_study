@@ -15,13 +15,23 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
 
 class LeakageError(RuntimeError):
     """train/test 경계를 넘는 정보 흐름이 감지됐을 때 발생."""
+
+
+class Splitter(Protocol):
+    """분할기 규약. iter_folds가 기대하는 호출 형태다."""
+
+    def split(
+        self, subject_ids: np.ndarray, trial_ids: np.ndarray
+    ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
+        """(train_idx, test_idx) 인덱스 쌍을 fold마다 하나씩 내놓는다."""
+        ...
 
 
 class _View:
@@ -66,6 +76,8 @@ class TrainView(_View):
 
 class TestView(_View):
     """fold의 평가 절반. 어떤 fit도 허용하지 않는다."""
+
+    __test__ = False  # pytest 수집 대상이 아님
 
     def transform(self, fitted_transformer: Any, modalities: list[str]) -> np.ndarray:
         """train에서 이미 fit된 변환기를 적용한다."""
@@ -146,10 +158,14 @@ class WindowedDataset:
     def get_trial_ids(self) -> np.ndarray:
         return self._trial_ids.copy()
 
-    def iter_folds(self, splitter: Any) -> Iterator[FoldView]:
+    def iter_folds(self, splitter: Splitter) -> Iterator[FoldView]:
         """분할기가 내놓는 fold를 뷰로 감싸 하나씩 내보낸다.
 
         데이터에 접근하는 유일한 경로다.
+
+        splitter.split(subject_ids, trial_ids)를 위치 인자 순서 그대로
+        호출한다 (피험자 ID가 먼저, 시행 ID가 다음). 분할기는 fold마다
+        (train_idx, test_idx) 인덱스 쌍을 하나씩 내놓아야 한다.
         """
         for fold_id, (train_idx, test_idx) in enumerate(
             splitter.split(self._subject_ids, self._trial_ids)

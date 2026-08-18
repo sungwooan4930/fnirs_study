@@ -60,6 +60,18 @@ def test_view_x_concatenates_modalities_in_given_order():
     assert x.shape == (8, 7)
 
 
+def test_view_x_respects_caller_order_not_sorted_order():
+    # eeg has width 4, fnirs has width 3 (different widths, so a
+    # transposition of the blocks is unmistakable in the output shape/values).
+    ds = make_dataset()
+    fold = next(iter(ds.iter_folds(DummySplitter())))
+    forward = fold.train.X(["eeg", "fnirs"])
+    reversed_ = fold.train.X(["fnirs", "eeg"])
+    expected_reversed = np.hstack([fold.train.X(["fnirs"]), fold.train.X(["eeg"])])
+    assert np.array_equal(reversed_, expected_reversed)
+    assert not np.array_equal(reversed_, forward)
+
+
 def test_view_x_rejects_unknown_modality():
     ds = make_dataset()
     fold = next(iter(ds.iter_folds(DummySplitter())))

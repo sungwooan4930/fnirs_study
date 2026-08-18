@@ -44,7 +44,73 @@
 
 없음. 브리프의 코드를 그대로 사용했다.
 
-## 남은 우려
+## 남은 우려 (최초 구현 시점)
 
 - pytest 수집 경고(`TestView` 이름 충돌)는 기능에 영향 없으나, 향후 pytest 설정에서
   `python_classes` 패턴을 조정하거나 별도 conftest 처리로 억제할지는 미확정 — 이번 태스크 범위 밖.
+  → **fix round 1에서 해소함 (아래 참조).**
+
+---
+
+## Fix round 1/5 — 스펙 리뷰 반영
+
+리뷰 결과: 배리어 자체(공개 `_X`/`_y` 부재, 뷰의 얕은 복사 아님, `X(modalities)` 순서 보존)는
+직접 프로빙 검증을 통과. 정합성에 영향 없는 3건의 개선 요청을 반영했다.
+
+### 1. (Important) `Splitter` Protocol 추가
+
+`iter_folds`가 받는 `splitter` 인자가 `Any`로만 타입되어 있고 호출 규약이 테스트 파일의
+`DummySplitter`에만 암묵적으로 존재했다. `src/datasets/contract.py`에 다음을 추가:
+
+```python
+class Splitter(Protocol):
+    """분할기 규약. iter_folds가 기대하는 호출 형태다."""
+
+    def split(
+        self, subject_ids: np.ndarray, trial_ids: np.ndarray
+    ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
+        """(train_idx, test_idx) 인덱스 쌍을 fold마다 하나씩 내놓는다."""
+        ...
+```
+
+- `iter_folds`의 인자 타입을 `Any` → `Splitter`로 변경.
+- `iter_folds` 독스트링에 `split(subject_ids, trial_ids)`를 위치 인자 순서대로 호출한다는 것과,
+  fold마다 `(train_idx, test_idx)` 쌍을 하나씩 내놓아야 한다는 것을 명시.
+- `typing`에서 `Protocol`을 추가로 import.
+- 이 Protocol은 (미래의) `splitters.py`가 아니라 `contract.py`에 둔다 — 소비자가 계약을 정의하고
+  구현체가 그것을 import하는 방향. Task 14는 여기서 `Splitter`를 import해야 한다.
+
+### 2. (Minor) `TestView`에 `__test__ = False` 추가
+
+`TestView`가 `Test`로 시작해 pytest가 테스트 클래스로 오인, 매 실행마다
+`PytestCollectionWarning: cannot collect test class 'TestView' because it has a __init__ constructor`
+경고를 냈다. `TestView`에 `__test__ = False` 클래스 속성을 추가해 pytest 수집 대상에서 제외했다.
+이것은 pytest 메타데이터일 뿐 데이터셋 계약의 공개 표면이 아니므로 브리프 코드를 그대로 쓴다는
+원칙과 충돌하지 않는다.
+
+### 3. (Minor) 호출자 지정 순서 보존 테스트 추가
+
+기존 `test_view_x_concatenates_modalities_in_given_order`는 `["eeg", "fnirs"]`를 호출하는데
+이는 정렬 순서와 우연히 같아서, 구현이 내부적으로 모달리티를 정렬해도 통과했을 것이다.
+`test_view_x_respects_caller_order_not_sorted_order`를 추가: `["fnirs", "eeg"]`(정렬 역순, 폭도
+다름 — fnirs 3열 vs eeg 4열)를 호출해 그 결과가 `X(["fnirs"])`와 `X(["eeg"])`를 그 순서로
+hstack한 것과 일치하고, `["eeg", "fnirs"]` 호출 결과와는 다름을 확인한다. (사설 속성 접근을
+피하기 위해 공개 API `fold.train.X([...])`만으로 기대값을 구성했다.)
+
+### 결과
+
+```bash
+cd /d/Study_fNIRS
+.venv/Scripts/pytest.exe tests/datasets/test_contract.py -v > .superpowers/sdd/2026-08-18-simulation-testbed/task-10-testlog.txt 2>&1
+.venv/Scripts/pytest.exe -q >> .superpowers/sdd/2026-08-18-simulation-testbed/task-10-testlog.txt 2>&1
+```
+
+- `tests/datasets/test_contract.py`: **15 passed** (1.42s) — 새 테스트 1개 추가로 14 → 15.
+- 전체 스위트: **84 passed** (3.41s) — **경고 0건** (이전 1건에서 감소).
+
+로그 파일은 이 fix round의 pytest 호출 결과로 덮어써졌다 (coordinator 지정 명령이 `>`이므로).
+최초 구현 시점의 사전 실패 로그·13개 통과 로그는 위 "절차"/"테스트 증거" 절 서술로 남아 있다.
+
+### 남은 우려
+
+없음. 세 가지 요청 모두 반영했고 경고 0건을 커맨드 실행으로 직접 확인했다.

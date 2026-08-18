@@ -5,36 +5,25 @@ PySide6 6.7.0 -- Qt runtime 6.7.0 -- Qt compiled 6.7.0
 rootdir: D:\Study_fNIRS
 configfile: pytest.ini
 plugins: qt-4.5.0
-collecting ... collected 14 items
+collecting ... collected 15 items
 
-tests/datasets/test_contract.py::test_no_public_x_or_y_attribute PASSED  [  7%]
-tests/datasets/test_contract.py::test_basic_properties PASSED            [ 14%]
-tests/datasets/test_contract.py::test_subject_ids_are_exposed_but_copied PASSED [ 21%]
-tests/datasets/test_contract.py::test_iter_folds_yields_views PASSED     [ 28%]
-tests/datasets/test_contract.py::test_view_x_concatenates_modalities_in_given_order PASSED [ 35%]
-tests/datasets/test_contract.py::test_view_x_rejects_unknown_modality PASSED [ 42%]
-tests/datasets/test_contract.py::test_view_y_rejects_unknown_target PASSED [ 50%]
-tests/datasets/test_contract.py::test_train_and_test_have_disjoint_rows PASSED [ 57%]
-tests/datasets/test_contract.py::test_testview_fit_raises_leakage_error PASSED [ 64%]
-tests/datasets/test_contract.py::test_testview_fit_transform_raises_leakage_error PASSED [ 71%]
-tests/datasets/test_contract.py::test_testview_transform_with_fitted_transformer_is_allowed PASSED [ 78%]
-tests/datasets/test_contract.py::test_trainview_groups_returns_subject_ids PASSED [ 85%]
-tests/datasets/test_contract.py::test_rejects_length_mismatch PASSED     [ 92%]
+tests/datasets/test_contract.py::test_no_public_x_or_y_attribute PASSED  [  6%]
+tests/datasets/test_contract.py::test_basic_properties PASSED            [ 13%]
+tests/datasets/test_contract.py::test_subject_ids_are_exposed_but_copied PASSED [ 20%]
+tests/datasets/test_contract.py::test_iter_folds_yields_views PASSED     [ 26%]
+tests/datasets/test_contract.py::test_view_x_concatenates_modalities_in_given_order PASSED [ 33%]
+tests/datasets/test_contract.py::test_view_x_respects_caller_order_not_sorted_order PASSED [ 40%]
+tests/datasets/test_contract.py::test_view_x_rejects_unknown_modality PASSED [ 46%]
+tests/datasets/test_contract.py::test_view_y_rejects_unknown_target PASSED [ 53%]
+tests/datasets/test_contract.py::test_train_and_test_have_disjoint_rows PASSED [ 60%]
+tests/datasets/test_contract.py::test_testview_fit_raises_leakage_error PASSED [ 66%]
+tests/datasets/test_contract.py::test_testview_fit_transform_raises_leakage_error PASSED [ 73%]
+tests/datasets/test_contract.py::test_testview_transform_with_fitted_transformer_is_allowed PASSED [ 80%]
+tests/datasets/test_contract.py::test_trainview_groups_returns_subject_ids PASSED [ 86%]
+tests/datasets/test_contract.py::test_rejects_length_mismatch PASSED     [ 93%]
 tests/datasets/test_contract.py::test_rejects_empty_dataset PASSED       [100%]
 
-============================== warnings summary ===============================
-src\datasets\contract.py:67
-  D:\Study_fNIRS\src\datasets\contract.py:67: PytestCollectionWarning: cannot collect test class 'TestView' because it has a __init__ constructor (from: tests/datasets/test_contract.py)
-    class TestView(_View):
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-======================== 14 passed, 1 warning in 1.39s ========================
-........................................................................ [ 86%]
-...........                                                              [100%]
-============================== warnings summary ===============================
-src\datasets\contract.py:67
-  D:\Study_fNIRS\src\datasets\contract.py:67: PytestCollectionWarning: cannot collect test class 'TestView' because it has a __init__ constructor (from: tests/datasets/test_contract.py)
-    class TestView(_View):
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-83 passed, 1 warning in 3.40s
+============================= 15 passed in 1.42s ==============================
+........................................................................ [ 85%]
+............                                                             [100%]
+84 passed in 3.41s
