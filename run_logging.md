@@ -423,3 +423,33 @@ cd web && npm run dev
 ### 다음 단계
 T3(고의적 누수 → 가드 차단 시연), T4(개인차 스윕 → LOSO 단조 하락) 진행.
 - [ ] T2 정확도 범위 — 파일럿 관측 후 회귀 기준 고정
+
+---
+
+## 2026-08-19 — Task 20: T3 누수 검출 — 가드는 작동, 부풀림 문턱(15%p)은 미달로 측정됨
+
+### 완료
+- `tests/evaluation/test_validation_leakage.py` — T3(누수 검출) 4개 `@pytest.mark.slow` 테스트 신규 작성
+
+### 결과 — (a) 성립, (b) 미달
+| 항목 | 값 |
+|------|-----|
+| LOSO pooled_accuracy (`pilot.yaml`, 가드 정상) | 0.6542 |
+| window_random leaky accuracy (같은 config, 가드 전부 OFF) | 0.7297 |
+| 측정된 부풀림 | **7.55%p** |
+| 설계 문턱 | 15%p |
+
+- **(a) 가드 작동 확인** — `window_random` 분할기(`allows_same_subject=False`)를 가드 ON 상태로 실행하면 `LeakageError("subjects appear in both train and test")`가 즉시 발생. `-UNSAFE` 디렉토리명·`metrics.json`의 `guards_disabled` 플래그도 확인. `TestView.fit()` 차단은 가드 설정과 무관하게 항상 발동함을 재확인(4번째 테스트).
+- **(b) 부풀림 측정, 문턱 미달** — 부풀림 방향은 맞다(누수가 accuracy를 올린다). 크기는 7.55%p로 설계 가정 15%p의 절반. **문턱을 낮추지 않았다** — `test_t3b_leakage_actually_inflates_accuracy`는 의도적으로 FAIL 상태로 남김. 원인 후보(미확정): ① 이 파일럿 규모(12명)에서 LOSO 자체가 이미 chance 대비 크게 높아(0.654 vs 0.333) 누수가 벌 수 있는 여유가 이론보다 작을 수 있음, ② `window_random`이 5-fold `KFold(shuffle=True)`라 인접 오버랩 창이 같은 fold에 남는 비율이 완전 무작위 배치의 이론적 상한보다 낮을 수 있음.
+- 상세: `.superpowers/sdd/2026-08-18-simulation-testbed/task-20-report.md` (git 제외, `.superpowers/` gitignore)
+
+### 테스트
+- `test_validation_leakage.py -m slow`: 3 passed, **1 failed**(의도적, 156.41s)
+- 빠른 스위트(`-m "not slow"`): 162 passed, 10 deselected, 7.38s — 회귀 없음
+
+### 계획서 연계
+목표 3 서브프로젝트 A+D 승인 기준 중 T3 부분 성립(가드 검출은 증명, 부풀림 크기 가정은 미검증). T4(개인차 스윕)는 다음 태스크.
+
+### 다음 단계
+- [ ] T3 부풀림 문턱(15%p) 미달 원인 조사 — 임의로 문턱을 낮추지 말고, 원인 규명 후 설계 문서(§8) 갱신 여부 논의
+- [ ] T4(개인차 스윕 → LOSO 단조 하락) 진행
