@@ -75,3 +75,48 @@ def test_confusion_matrix_shape_and_total():
 def test_rejects_empty_results():
     with pytest.raises(ValueError, match="no folds"):
         aggregate([], n_classes=3, cv_method="loso")
+
+
+def test_accuracy_std_is_sample_standard_deviation():
+    """accuracy_std는 표본 표준편차(ddof=1)를 사용한다.
+
+    3개 fold with accuracies [1.0, 0.0, 0.5]:
+    - mean = 1.5 / 3 = 0.5
+    - sample var = [(1-0.5)² + (0-0.5)² + (0.5-0.5)²] / (3-1)
+                 = [0.25 + 0.25 + 0] / 2 = 0.25
+    - sample std = sqrt(0.25) = 0.5
+    """
+    folds = [
+        _fold(0, "sub-01", [0, 1], [0, 1]),           # accuracy 1.0
+        _fold(1, "sub-02", [0, 1], [1, 0]),           # accuracy 0.0
+        _fold(2, "sub-03", [0, 1], [0, 0]),           # accuracy 0.5
+    ]
+    m = aggregate(folds, n_classes=2, cv_method="loso")
+    assert m["accuracy_mean"] == pytest.approx(0.5)
+    assert m["accuracy_std"] == pytest.approx(0.5)
+
+
+def test_accuracy_std_single_fold_returns_zero():
+    """단일 fold는 accuracy_std = 0.0 (nan 방지)."""
+    single = [_fold(0, "sub-01", [0, 1, 2, 0], [0, 1, 2, 0])]
+    m = aggregate(single, n_classes=3, cv_method="loso")
+    assert m["accuracy_std"] == 0.0
+
+
+def test_pooled_accuracy_with_unequal_folds():
+    """pooled accuracy는 window 가중치를 사용하고, accuracy_mean과 다르다.
+
+    Fold 0: 10 windows, 9 correct → 90%
+    Fold 1: 2 windows, 0 correct → 0%
+
+    - pooled_accuracy = 9 / 12 = 0.75
+    - accuracy_mean = (0.9 + 0.0) / 2 = 0.45
+    """
+    folds = [
+        _fold(0, "sub-01", [0]*10, [0]*9 + [1]),  # 9/10
+        _fold(1, "sub-02", [0, 0], [1, 1]),        # 0/2
+    ]
+    m = aggregate(folds, n_classes=2, cv_method="loso")
+    assert m["pooled_accuracy"] == pytest.approx(9.0 / 12)
+    assert m["accuracy_mean"] == pytest.approx(0.45)
+    assert m["pooled_accuracy"] != m["accuracy_mean"]

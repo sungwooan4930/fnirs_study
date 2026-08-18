@@ -13,7 +13,14 @@ from sklearn.metrics import confusion_matrix
 
 
 def aggregate(fold_results, *, n_classes: int, cv_method: str) -> dict:
-    """fold 결과를 하나의 지표 dict으로 모은다."""
+    """fold 결과를 하나의 지표 dict으로 모은다.
+
+    accuracy_std는 fold들을 표본으로 간주한 표본 표준편차(ddof=1)를 사용한다.
+    fold들은 모집단 학습자에서 추출한 표본이므로, 보고되는 "45% ± 8%"는
+    사람 간 변동성으로 해석된다. 모집단 공식(ddof=0)은 그 변동성을
+    약 √(N/(N−1))만큼 과소평가한다. 단일 fold(N=1)에서는 nan을 피하고
+    0.0을 반환한다.
+    """
     if not fold_results:
         raise ValueError("no folds to aggregate")
 
@@ -30,13 +37,19 @@ def aggregate(fold_results, *, n_classes: int, cv_method: str) -> dict:
 
     worst = int(np.argmin(accuracies))
 
+    # accuracy_std: 단일 fold 시 nan 방지, 샘플 표준편차 사용
+    if len(fold_results) == 1:
+        accuracy_std = 0.0
+    else:
+        accuracy_std = float(accuracies.std(ddof=1))
+
     return {
         "cv_method": cv_method,
         "chance_level": float(chance),
         "n_folds": len(fold_results),
         "n_windows_evaluated": n_total,
         "accuracy_mean": float(accuracies.mean()),
-        "accuracy_std": float(accuracies.std()),
+        "accuracy_std": accuracy_std,
         "accuracy_worst": float(accuracies[worst]),
         "worst_fold_subjects": list(fold_results[worst].test_subjects),
         "pooled_accuracy": n_correct / n_total,
