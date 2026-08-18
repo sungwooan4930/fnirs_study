@@ -1,9 +1,29 @@
-numpy>=1.26.0,<3.0
-scipy>=1.12.0
-PySide6>=6.6.0
-pyqtgraph>=0.13.7
-h5py>=3.10.0
-PyYAML>=6.0.1
-pyserial>=3.5
-matplotlib>=3.8.0
-Pillow>=10.0.0
+# 뇌신호 기반 멀티모달 AI 인지상태 추정 — 연구 파이프라인 의존성
+# 스택 근거: CLAUDE.md §7. 버전은 착수 시 lock 예정.
+
+# --- 기본 ---
+numpy>=1.26,<3.0
+scipy>=1.12
+pandas>=2.2
+PyYAML>=6.0
+
+# --- 뇌신호 처리 ---
+mne>=1.7                # EEG 전처리·에포크
+mne-nirs>=0.7           # fNIRS: SCI, mBLL, HRF
+mne-bids>=0.15          # BIDS 입출력
+pyprep>=0.4             # PREP 파이프라인 (EEG)
+# asrpy                 # ASR 아티팩트 보정 — 설치 검증 후 활성화
+
+# --- 동기화 (시뮬레이션 단계에서도 스트림 모킹에 사용) ---
+pylsl>=1.16
+
+# --- 머신러닝 ---
+scikit-learn>=1.5       # 융합 전략 1·2, LOSO-CV
+xgboost>=2.1            # 융합 전략 1
+torch>=2.3              # 융합 전략 3 (CNN-LSTM + cross-modal attention)
+
+# --- XAI ---
+shap>=0.46
+
+# --- 자극 제시 (목표 1 착수 시 활성화) ---
+# psychopy>=2024.1

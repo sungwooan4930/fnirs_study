@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Theme Preview</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', system-ui, sans-serif; background: #1a1a2e; }
+
+.page { display: flex; flex-direction: column; gap: 0; }
+
+/* ── 공통 카드 구조 ── */
+.theme-section {
+  padding: 32px 40px 40px;
+  border-bottom: 4px solid rgba(0,0,0,0.15);
+}
+.theme-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  opacity: 0.5;
+  margin-bottom: 20px;
+}
+.mockup {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  max-width: 900px;
+}
+
+/* TopBar */
+.tb { display: flex; align-items: center; gap: 14px; padding: 9px 18px; border-bottom: 2px solid; flex-shrink: 0; }
+.tb-title { font-size: 1rem; font-weight: 700; margin-right: auto; }
+.tb-dot { width: 9px; height: 9px; border-radius: 50%; background: #22c55e; }
+.tb-ble { font-size: 0.78rem; }
+.tb-ci-track { width: 90px; height: 8px; border-radius: 4px; overflow: hidden; }
+.tb-ci-fill { height: 100%; width: 62%; border-radius: 4px; }
+
+/* Measuring bar */
+.mbar { display: flex; align-items: center; justify-content: space-between; padding: 7px 16px; border-bottom: 1px solid; }
+.tabs { display: flex; gap: 4px; }
+.tab { padding: 5px 18px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; cursor: default; }
+.tab.active { color: #fff; }
+.elapsed { font-size: 0.88rem; font-weight: 700; }
+.btn-stop { padding: 6px 16px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; color: #fff; }
+
+/* Content area */
+.content { display: flex; gap: 0; }
+
+/* Brain panel */
+.brain-panel { flex: 1; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.bm-controls { display: flex; gap: 8px; align-items: center; }
+.btn-mode { padding: 4px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; cursor: default; }
+.btn-mode.active { color: #fff; }
+.divider { width: 1px; height: 16px; }
+.colorbar-row { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; }
+.cb-grad { width: 60px; height: 7px; border-radius: 3px; background: linear-gradient(to right, #4e7aff, #fff, #ef4444); }
+
+/* Brain image placeholder */
+.brain-placeholder {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 340/290;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.brain-placeholder svg { width: 100%; height: 100%; }
+
+/* Focus overlay inside brain */
+.focus-rect { font-size: 11px; font-family: system-ui; }
+
+/* Caption */
+.caption { font-size: 0.7rem; opacity: 0.6; text-align: center; }
+
+/* Report snippet */
+.report-snip { flex: 0 0 260px; padding: 16px; display: flex; flex-direction: column; gap: 10px; border-left: 1px solid; }
+.section-lbl { font-size: 0.58rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.score-row { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; border: 1px solid; }
+.score-ring { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 800; flex-shrink: 0; }
+.score-meta { display: flex; flex-direction: column; gap: 4px; }
+.score-ttl { font-size: 0.78rem; font-weight: 700; }
+.score-bar { height: 6px; border-radius: 3px; margin-top: 2px; width: 100%; overflow: hidden; }
+.score-fill { height: 100%; border-radius: 3px; width: 72%; }
+
+.info-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ic { padding: 8px 10px; border-radius: 8px; border: 1px solid; }
+.ic-lbl { font-size: 0.56rem; opacity: 0.6; margin-bottom: 2px; }
+.ic-val { font-size: 0.82rem; font-weight: 700; }
+
+.region-boxes { display: flex; flex-direction: column; gap: 6px; }
+.rb { padding: 8px 10px; border-radius: 8px; border: 1px solid; border-left: 3px solid; }
+.rb-name { font-size: 0.7rem; font-weight: 700; margin-bottom: 3px; }
+.rb-txt { font-size: 0.62rem; opacity: 0.65; line-height: 1.5; }
+
+/* ────────────────────────────────
+   A. DEEP NAVY
+──────────────────────────────── */
+.theme-a {
+  background: #0d1b2a;
+  color: #e2eaf4;
+}
+.theme-a .theme-label { color: #e2eaf4; }
+.theme-a .mockup { background: #0d1b2a; border: 1px solid #1e3148; }
+.theme-a .tb { background: #162032; border-color: #38bdf8; }
+.theme-a .tb-title { color: #38bdf8; }
+.theme-a .tb-ble { color: #8eaec9; }
+.theme-a .tb-ci-track { background: #1e3148; }
+.theme-a .tb-ci-fill { background: linear-gradient(to right, #0ea5e9, #38bdf8); }
+.theme-a .mbar { background: #162032; border-color: #1e3148; }
+.theme-a .tabs .tab { border: 1px solid #1e3148; color: #8eaec9; background: transparent; }
+.theme-a .tabs .tab.active { background: #0ea5e9; border-color: #0ea5e9; }
+.theme-a .elapsed { color: #38bdf8; }
+.theme-a .btn-stop { background: #dc2626; }
+.theme-a .content { background: #0d1b2a; }
+.theme-a .btn-mode { border: 1px solid #1e3148; color: #8eaec9; background: transparent; }
+.theme-a .btn-mode.active { background: #0ea5e9; border-color: #0ea5e9; }
+.theme-a .divider { background: #1e3148; }
+.theme-a .colorbar-row { color: #8eaec9; }
+.theme-a .brain-placeholder { background: #091422; }
+.theme-a .caption { color: #8eaec9; }
+.theme-a .report-snip { border-color: #1e3148; }
+.theme-a .section-lbl { color: #38bdf8; }
+.theme-a .score-row { background: #162032; border-color: #1e4a6a; }
+.theme-a .score-ring { background: conic-gradient(#0ea5e9 0% 72%, #1e3148 72% 100%); color: #38bdf8; }
+.theme-a .score-ttl { color: #e2eaf4; }
+.theme-a .score-bar { background: #1e3148; }
+.theme-a .score-fill { background: linear-gradient(to right, #0ea5e9, #38bdf8); }
+.theme-a .ic { background: #162032; border-color: #1e3148; }
+.theme-a .ic-lbl { color: #8eaec9; }
+.theme-a .ic-val { color: #e2eaf4; }
+.theme-a .rb { background: #162032; border-color: #1e3148; border-left-color: #0ea5e9; }
+.theme-a .rb-name { color: #e2eaf4; }
+.theme-a .rb-txt { color: #8eaec9; }
+
+/* ────────────────────────────────
+   B. CLINICAL WHITE
+──────────────────────────────── */
+.theme-b {
+  background: #f8fafc;
+  color: #0f172a;
+}
+.theme-b .theme-label { color: #0f172a; }
+.theme-b .mockup { background: #f8fafc; border: 1px solid #e2e8f0; }
+.theme-b .tb { background: #ffffff; border-color: #0ea5e9; }
+.theme-b .tb-title { color: #0369a1; }
+.theme-b .tb-ble { color: #64748b; }
+.theme-b .tb-ci-track { background: #e2e8f0; }
+.theme-b .tb-ci-fill { background: linear-gradient(to right, #0ea5e9, #38bdf8); }
+.theme-b .mbar { background: #ffffff; border-color: #e2e8f0; }
+.theme-b .tabs .tab { border: 1px solid #e2e8f0; color: #64748b; background: transparent; }
+.theme-b .tabs .tab.active { background: #0ea5e9; border-color: #0ea5e9; }
+.theme-b .elapsed { color: #0369a1; }
+.theme-b .btn-stop { background: #dc2626; }
+.theme-b .content { background: #f8fafc; }
+.theme-b .btn-mode { border: 1px solid #e2e8f0; color: #64748b; background: transparent; }
+.theme-b .btn-mode.active { background: #0ea5e9; border-color: #0ea5e9; }
+.theme-b .divider { background: #e2e8f0; }
+.theme-b .colorbar-row { color: #64748b; }
+.theme-b .brain-placeholder { background: #f1f5f9; }
+.theme-b .caption { color: #64748b; }
+.theme-b .report-snip { border-color: #e2e8f0; background: #ffffff; }
+.theme-b .section-lbl { color: #0ea5e9; }
+.theme-b .score-row { background: #f0f9ff; border-color: #7dd3fc; }
+.theme-b .score-ring { background: conic-gradient(#0ea5e9 0% 72%, #e2e8f0 72% 100%); color: #0369a1; }
+.theme-b .score-ttl { color: #0f172a; }
+.theme-b .score-bar { background: #e2e8f0; }
+.theme-b .score-fill { background: linear-gradient(to right, #0ea5e9, #38bdf8); }
+.theme-b .ic { background: #ffffff; border-color: #e2e8f0; }
+.theme-b .ic-lbl { color: #64748b; }
+.theme-b .ic-val { color: #0f172a; }
+.theme-b .rb { background: #ffffff; border-color: #e2e8f0; border-left-color: #0ea5e9; }
+.theme-b .rb-name { color: #0f172a; }
+.theme-b .rb-txt { color: #64748b; }
+
+/* ────────────────────────────────
+   C. SLATE PRO
+──────────────────────────────── */
+.theme-c {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+.theme-c .theme-label { color: #1e293b; }
+.theme-c .mockup { background: #f1f5f9; border: 1px solid #cbd5e1; }
+.theme-c .tb { background: #ffffff; border-color: #4f46e5; }
+.theme-c .tb-title { color: #4f46e5; }
+.theme-c .tb-ble { color: #64748b; }
+.theme-c .tb-ci-track { background: #e2e8f0; }
+.theme-c .tb-ci-fill { background: linear-gradient(to right, #6366f1, #a78bfa); }
+.theme-c .mbar { background: #ffffff; border-color: #e2e8f0; }
+.theme-c .tabs .tab { border: 1px solid #e2e8f0; color: #64748b; background: transparent; }
+.theme-c .tabs .tab.active { background: #4f46e5; border-color: #4f46e5; }
+.theme-c .elapsed { color: #4f46e5; }
+.theme-c .btn-stop { background: #dc2626; }
+.theme-c .content { background: #f1f5f9; }
+.theme-c .btn-mode { border: 1px solid #e2e8f0; color: #64748b; background: transparent; }
+.theme-c .btn-mode.active { background: #4f46e5; border-color: #4f46e5; }
+.theme-c .divider { background: #e2e8f0; }
+.theme-c .colorbar-row { color: #64748b; }
+.theme-c .brain-placeholder { background: #e8edf5; }
+.theme-c .caption { color: #64748b; }
+.theme-c .report-snip { border-color: #e2e8f0; background: #ffffff; }
+.theme-c .section-lbl { color: #6366f1; }
+.theme-c .score-row { background: #eef2ff; border-color: #a5b4fc; }
+.theme-c .score-ring { background: conic-gradient(#4f46e5 0% 72%, #e2e8f0 72% 100%); color: #4f46e5; }
+.theme-c .score-ttl { color: #1e293b; }
+.theme-c .score-bar { background: #e2e8f0; }
+.theme-c .score-fill { background: linear-gradient(to right, #6366f1, #a78bfa); }
+.theme-c .ic { background: #ffffff; border-color: #e2e8f0; }
+.theme-c .ic-lbl { color: #64748b; }
+.theme-c .ic-val { color: #1e293b; }
+.theme-c .rb { background: #ffffff; border-color: #e2e8f0; border-left-color: #4f46e5; }
+.theme-c .rb-name { color: #1e293b; }
+.theme-c .rb-txt { color: #64748b; }
+
+/* ────────────────────────────────
+   D. WARM CREAM
+──────────────────────────────── */
+.theme-d {
+  background: #faf8f4;
+  color: #1c1917;
+}
+.theme-d .theme-label { color: #1c1917; }
+.theme-d .mockup { background: #faf8f4; border: 1px solid #e8e2d8; }
+.theme-d .tb { background: #ffffff; border-color: #2563eb; }
+.theme-d .tb-title { color: #1d4ed8; }
+.theme-d .tb-ble { color: #78716c; }
+.theme-d .tb-ci-track { background: #e8e2d8; }
+.theme-d .tb-ci-fill { background: linear-gradient(to right, #2563eb, #60a5fa); }
+.theme-d .mbar { background: #ffffff; border-color: #e8e2d8; }
+.theme-d .tabs .tab { border: 1px solid #e8e2d8; color: #78716c; background: transparent; }
+.theme-d .tabs .tab.active { background: #2563eb; border-color: #2563eb; }
+.theme-d .elapsed { color: #1d4ed8; }
+.theme-d .btn-stop { background: #b91c1c; }
+.theme-d .content { background: #faf8f4; }
+.theme-d .btn-mode { border: 1px solid #e8e2d8; color: #78716c; background: transparent; }
+.theme-d .btn-mode.active { background: #2563eb; border-color: #2563eb; }
+.theme-d .divider { background: #e8e2d8; }
+.theme-d .colorbar-row { color: #78716c; }
+.theme-d .brain-placeholder { background: #f0ede6; }
+.theme-d .caption { color: #78716c; }
+.theme-d .report-snip { border-color: #e8e2d8; background: #ffffff; }
+.theme-d .section-lbl { color: #2563eb; }
+.theme-d .score-row { background: #eff6ff; border-color: #93c5fd; }
+.theme-d .score-ring { background: conic-gradient(#2563eb 0% 72%, #e8e2d8 72% 100%); color: #1d4ed8; }
+.theme-d .score-ttl { color: #1c1917; }
+.theme-d .score-bar { background: #e8e2d8; }
+.theme-d .score-fill { background: linear-gradient(to right, #2563eb, #60a5fa); }
+.theme-d .ic { background: #ffffff; border-color: #e8e2d8; }
+.theme-d .ic-lbl { color: #78716c; }
+.theme-d .ic-val { color: #1c1917; }
+.theme-d .rb { background: #ffffff; border-color: #e8e2d8; border-left-color: #2563eb; }
+.theme-d .rb-name { color: #1c1917; }
+.theme-d .rb-txt { color: #78716c; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ── A: Deep Navy ── -->
+<div class="theme-section theme-a">
+  <div class="theme-label">A — Deep Navy &nbsp;·&nbsp; 딥 블루 다크</div>
+  <div class="mockup">
+    <!-- TopBar -->
+    <div class="tb">
+      <span class="tb-title">fNIRS Monitor</span>
+      <div class="tb-dot"></div>
+      <span class="tb-ble">연결됨</span>
+      <div class="tb-ci-track"><div class="tb-ci-fill"></div></div>
+      <span style="font-size:0.78rem;font-weight:700;color:#38bdf8">CI 62%</span>
+    </div>
+    <!-- Measuring bar -->
+    <div class="mbar">
+      <div class="tabs">
+        <div class="tab active">3D Brain</div>
+        <div class="tab">Time Series</div>
+      </div>
+      <span class="elapsed" style="color:#38bdf8">⏱ 04:22</span>
+      <div class="btn-stop" style="padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:700;">■ 측정 종료</div>
+    </div>
+    <!-- Content -->
+    <div class="content">
+      <div class="brain-panel">
+        <div class="bm-controls">
+          <div class="btn-mode active">HbO</div>
+          <div class="btn-mode">HbR</div>
+          <div class="divider" style="background:#1e3148"></div>
+          <div class="btn-mode active">2D</div>
+          <div class="btn-mode">3D</div>
+          <div class="divider" style="background:#1e3148"></div>
+          <div class="colorbar-row"><span>−5</span><div class="cb-grad"></div><span>+5</span></div>
+        </div>
+        <div class="brain-placeholder" style="background:#091422;">
+          <svg viewBox="0 0 340 290">
+            <!-- Brain silhouette -->
+            <ellipse cx="170" cy="130" rx="120" ry="110" fill="#0d2a40" stroke="#1e3148" stroke-width="1.5"/>
+            <ellipse cx="170" cy="128" rx="105" ry="95" fill="#0a2035" stroke="none"/>
+            <!-- Channel blobs -->
+            <radialGradient id="a1" cx="36%" cy="52%" r="18%"><stop offset="0%" stop-color="#4e7aff" stop-opacity="0.5"/><stop offset="100%" stop-color="#4e7aff" stop-opacity="0"/></radialGradient>
+            <radialGradient id="a2" cx="64%" cy="52%" r="18%"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.55"/><stop offset="100%" stop-color="#ef4444" stop-opacity="0"/></radialGradient>
+            <radialGradient id="a3" cx="38%" cy="65%" r="15%"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.3"/><stop offset="100%" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+            <radialGradient id="a4" cx="62%" cy="65%" r="15%"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.4"/><stop offset="100%" stop-color="#ef4444" stop-opacity="0"/></radialGradient>
+            <rect width="340" height="290" fill="url(#a1)"/>
+            <rect width="340" height="290" fill="url(#a2)"/>
+            <rect width="340" height="290" fill="url(#a3)"/>
+            <rect width="340" height="290" fill="url(#a4)"/>
+            <!-- Channel labels -->
+            <text x="122" y="148" font-size="9" fill="#8eaec9" font-family="system-ui" text-anchor="middle">Ch1</text>
+            <text x="218" y="148" font-size="9" fill="#8eaec9" font-family="system-ui" text-anchor="middle">Ch2</text>
+            <text x="128" y="186" font-size="9" fill="#8eaec9" font-family="system-ui" text-anchor="middle">Ch3</text>
+            <text x="212" y="186" font-size="9" fill="#8eaec9" font-family="system-ui" text-anchor="middle">Ch4</text>
+            <!-- Focus rect -->
+            <rect x="100" y="256" width="140" height="34" fill="#000" rx="4"/>
+            <text x="170" y="268" font-size="8" fill="#9ca3af" font-family="system-ui" text-anchor="middle">집중도</text>
+            <text x="170" y="283" font-size="13" font-weight="700" fill="#ef4444" font-family="system-ui" text-anchor="middle">높음</text>
+          </svg>
+        </div>
+        <div class="caption">전전두엽(PFC) HbO — baseline 대비: Blue(↓) → White → Red(↑)</div>
+      </div>
+      <div class="report-snip">
+        <div>
+          <div class="section-lbl">세션 요약</div>
+          <div class="info-cards">
+            <div class="ic"><div class="ic-lbl">이름</div><div class="ic-val">홍길동</div></div>
+            <div class="ic"><div class="ic-lbl">나이</div><div class="ic-val">28세</div></div>
+            <div class="ic"><div class="ic-lbl">측정 날짜</div><div class="ic-val">2026.04.15</div></div>
+            <div class="ic"><div class="ic-lbl">측정 시간</div><div class="ic-val">7분 12초</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="section-lbl">전체 집중도</div>
+          <div class="score-row">
+            <div class="score-ring" style="font-size:0.88rem;">72</div>
+            <div class="score-meta" style="flex:1">
+              <div class="score-ttl">집중도 지수 — 양호</div>
+              <div class="score-bar"><div class="score-fill"></div></div>
+              <div style="font-size:0.6rem;opacity:0.65;margin-top:2px;">HbO 신호가 안정적으로 상승하였습니다.</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="section-lbl">부위별 분석</div>
+          <div class="region-boxes">
+            <div class="rb"><div class="rb-name">좌측 전두엽 전방</div><div class="rb-txt">언어 처리 영역이 활발하게 반응하였습니다.</div></div>
+            <div class="rb"><div class="rb-name">우측 전두엽 전방</div><div class="rb-txt">안정적인 수준으로 고르게 활성화되었습니다.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── B: Clinical White ── -->
+<div class="theme-section theme-b">
+  <div class="theme-label">B — Clinical White &nbsp;·&nbsp; 클리니컬 화이트</div>
+  <div class="mockup">
+    <div class="tb">
+      <span class="tb-title">fNIRS Monitor</span>
+      <div class="tb-dot"></div>
+      <span class="tb-ble">연결됨</span>
+      <div class="tb-ci-track"><div class="tb-ci-fill"></div></div>
+      <span style="font-size:0.78rem;font-weight:700;color:#0369a1">CI 62%</span>
+    </div>
+    <div class="mbar">
+      <div class="tabs">
+        <div class="tab active">3D Brain</div>
+        <div class="tab">Time Series</div>
+      </div>
+      <span class="elapsed">⏱ 04:22</span>
+      <div class="btn-stop" style="padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:700;">■ 측정 종료</div>
+    </div>
+    <div class="content">
+      <div class="brain-panel">
+        <div class="bm-controls">
+          <div class="btn-mode active">HbO</div>
+          <div class="btn-mode">HbR</div>
+          <div class="divider" style="background:#e2e8f0"></div>
+          <div class="btn-mode active">2D</div>
+          <div class="btn-mode">3D</div>
+          <div class="divider" style="background:#e2e8f0"></div>
+          <div class="colorbar-row"><span>−5</span><div class="cb-grad"></div><span>+5</span></div>
+        </div>
+        <div class="brain-placeholder" style="background:#f1f5f9;">
+          <svg viewBox="0 0 340 290">
+            <ellipse cx="170" cy="130" rx="120" ry="110" fill="#e8f1f8" stroke="#d1e3f0" stroke-width="1.5"/>
+            <ellipse cx="170" cy="128" rx="105" ry="95" fill="#dbeefe" stroke="none"/>
+            <radialGradient id="b1" cx="36%" cy="52%" r="18%"><stop offset="0%" stop-color="#4e7aff" stop-opacity="0.45"/><stop offset="100%" stop-color="#4e7aff" stop-opacity="0"/></radialGradient>
+            <radialGradient id="b2" cx="64%" cy="52%" r="18%"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.5"/><stop offset="100%" stop-color="#ef4444" stop-opacity="0"/></radialGradient>
+            <radialGradient id="b3" cx="38%" cy="65%" r="15%"><stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.35"/><stop offset="100%" stop-color="#7dd3fc" stop-opacity="0"/></radialGradient>
+            <radialGradient id="b4" cx="62%" cy="65%" r="15%"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.38"/><stop offset="100%" stop-color="#ef4444" stop-opacity="0"/></radialGradient>
+            <rect width="340" height="290" fill="url(#b1)"/>
+            <rect width="340" height="290" fill="url(#b2)"/>
+            <rect width="340" height="290" fill="url(#b3)"/>
+            <rect width="340" height="290" fill="url(#b4)"/>
+            <text x="122" y="148" font-size="9" fill="#64748b" font-family="system-ui" text-anchor="middle">Ch1</text>
+            <text x="218" y="148" font-size="9" fill="#64748b" font-family="system-ui" text-anchor="middle">Ch2</text>
+            <text x="128" y="186" font-size="9" fill="#64748b" font-family="system-ui" text-anchor="middle">Ch3</text>
+            <text x="212" y="186" font-size="9" fill="#64748b" font-family="system-ui" text-anchor="middle">Ch4</text>
+            <rect x="100" y="256" width="140" height="34" fill="#000" rx="4"/>
+            <text x="170" y="268" font-size="8" fill="#9ca3af" font-family="system-ui" text-anchor="middle">집중도</text>
+            <text x="170" y="283" font-size="13" font-weight="700" fill="#ef4444" font-family="system-ui" text-anchor="middle">높음</text>
+          </svg>
+        </div>
+        <div class="caption">전전두엽(PFC) HbO — baseline 대비: Blue(↓) → White → Red(↑)</div>
+      </div>
+      <div class="report-snip">
+        <div>
+          <div class="section-lbl">세션 요약</div>
+          <div class="info-cards">
+            <div class="ic"><div class="ic-lbl">이름</div><div class="ic-val">홍길동</div></div>
+            <div class="ic"><div class="ic-lbl">나이</div><div class="ic-val">28세</div></div>
+            <div class="ic"><div class="ic-lbl">측정 날짜</div><div class="ic-val">2026.04.15</div></div>
+            <div class="ic"><div class="ic-lbl">측정 시간</div><div class="ic-val">7분 12초</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="section-lbl">전체 집중도</div>
+          <div class="score-row">
+            <div class="score-ring" style="font-size:0.88rem;">72</div>
+            <div class="score-meta" style="flex:1">
+              <div class="score-ttl">집중도 지수 — 양호</div>
+              <div class="score-bar"><div class="score-fill"></div></div>
+              <div style="font-size:0.6rem;opacity:0.65;margin-top:2px;">HbO 신호가 안정적으로 상승하였습니다.</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="section-lbl">부위별 분석</div>
+          <div class="region-boxes">
+            <div class="rb"><div class="rb-name">좌측 전두엽 전방</div><div class="rb-txt">언어 처리 영역이 활발하게 반응하였습니다.</div></div>
+            <div class="rb"><div class="rb-name">우측 전두엽 전방</div><div class="rb-txt">안정적인 수준으로 고르게 활성화되었습니다.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── C: Slate Pro ── -->
+<div class="theme-section theme-c">
+  <div class="theme-label">C — Slate Pro &nbsp;·&nbsp; 슬레이트 인디고</div>
+  <div class="mockup">
+    <div class="tb">
+      <span class="tb-title">fNIRS Monitor</span>
+      <div class="tb-dot"></div>
+      <span class="tb-ble">연결됨</span>
+      <div class="tb-ci-track"><div class="tb-ci-fill"></div></div>
+      <span style="font-size:0.78rem;font-weight:700;color:#4f46e5">CI 62%</span>
+    </div>
+    <div class="mbar">
+      <div class="tabs">
+        <div class="tab active">3D Brain</div>
+        <div class="tab">Time Series</div>
+      </div>
+      <span class="elapsed">⏱ 04:22</span>
+      <div class="btn-stop" style="padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:700;">■ 측정 종료</div>
+    </div>
+    <div class="content">
+      <div class="brain-panel">
+        <div class="bm-controls">
+          <div class="btn-mode active">HbO</div>
+          <div class="btn-mode">HbR</div>
+          <div class="divider" style="background:#e2e8f0"></div>
+          <div class="btn-mode active">2D</div>
+          <div class="btn-mode">3D</div>
+          <div class="divider" style="background:#e2e8f0"></div>
+          <div class="colorbar-row"><span>−5</span><div class="cb-grad"></div><span>+5</span></div>
+        </div>
+        <div class="brain-placeholder" style="background:#e8edf5;">
+          <svg viewBox="0 0 340 290">
+            <ellipse cx="170" cy="130" rx="120" ry="110" fill="#dde3f0" stroke="#c7d0e8" stroke-width="1.5"/>
+            <ellipse cx="170" cy="128" rx="105" ry="95" fill="#d4dcee" stroke="none"/>
+            <radialGradient id="c1" cx="36%" cy="52%" r="18%"><stop offset="0%" stop-color="#4e7aff" stop-opacity="0.5"/><stop offset="100%" stop-color="#4e7aff" stop-opacity="0"/></radialGradient>
+            <radialGradient id="c2" cx="64%" cy="52%" r="18%"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.55"/><stop offset="100%" stop-color="#ef4444" stop-opacity="0"/></radialGradient>
+            <radialGradient id="c3" cx="38%" cy="65%" r="15%"><stop offset="0%" stop-color="#a78bfa" stop-opacity="0.4"/><stop offset="100%" stop-color="#a78bfa" stop-opacity="0"/></radialGradient>
+            <radialGradient id="c4" cx="62%" cy="65%" r="15%"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.38"/><stop offset="100%" stop-color="#ef4444" stop-opacity="0"/></radialGradient>
+            <rect width="340" height="290" fill="url(#c1)"/>
+            <rect width="340" height="290" fill="url(#c2)"/>
+            <rect width="340" height="290" fill="url(#c3)"/>
+            <rect width="340" height="290" fill="url(#c4)"/>
+            <text x="122" y="148" font-size="9" fill="#64748b" font-family="system-ui" text-anchor="middle">Ch1</text>
+            <text x="218" y="148" font-size="9" fill="#64748b" font-family="system-ui" text-anchor="middle">Ch2</text>
+            <text x="128" y="186" font-size="9" fill="#64748b" font-family="system-ui" text-anchor="middle">Ch3</text>
+            <text x="212" y="186" font-size="9" fill="#64748b" font-family="system-ui" text-anchor="middle">Ch4</text>
+            <rect x="100" y="256" width="140" height="34" fill="#000" rx="4"/>
+            <text x="170" y="268" font-size="8" fill="#9ca3af" font-family="system-ui" text-anchor="middle">집중도</text>
+            <text x="170" y="283" font-size="13" font-weight="700" fill="#ef4444" font-family="system-ui" text-anchor="middle">높음</text>
+          </svg>
+        </div>
+        <div class="caption">전전두엽(PFC) HbO — baseline 대비: Blue(↓) → White → Red(↑)</div>
+      </div>
+      <div class="report-snip">
+        <div>
+          <div class="section-lbl">세션 요약</div>
+          <div class="info-cards">
+            <div class="ic"><div class="ic-lbl">이름</div><div class="ic-val">홍길동</div></div>
+            <div class="ic"><div class="ic-lbl">나이</div><div class="ic-val">28세</div></div>
+            <div class="ic"><div class="ic-lbl">측정 날짜</div><div class="ic-val">2026.04.15</div></div>
+            <div class="ic"><div class="ic-lbl">측정 시간</div><div class="ic-val">7분 12초</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="section-lbl">전체 집중도</div>
+          <div class="score-row">
+            <div class="score-ring" style="font-size:0.88rem;">72</div>
+            <div class="score-meta" style="flex:1">
+              <div class="score-ttl">집중도 지수 — 양호</div>
+              <div class="score-bar"><div class="score-fill"></div></div>
+              <div style="font-size:0.6rem;opacity:0.65;margin-top:2px;">HbO 신호가 안정적으로 상승하였습니다.</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="section-lbl">부위별 분석</div>
+          <div class="region-boxes">
+            <div class="rb"><div class="rb-name">좌측 전두엽 전방</div><div class="rb-txt">언어 처리 영역이 활발하게 반응하였습니다.</div></div>
+            <div class="rb"><div class="rb-name">우측 전두엽 전방</div><div class="rb-txt">안정적인 수준으로 고르게 활성화되었습니다.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── D: Warm Cream ── -->
+<div class="theme-section theme-d">
+  <div class="theme-label">D — Warm Cream &nbsp;·&nbsp; 웜 크림</div>
+  <div class="mockup">
+    <div class="tb">
+      <span class="tb-title">fNIRS Monitor</span>
+      <div class="tb-dot"></div>
+      <span class="tb-ble">연결됨</span>
+      <div class="tb-ci-track"><div class="tb-ci-fill"></div></div>
+      <span style="font-size:0.78rem;font-weight:700;color:#1d4ed8">CI 62%</span>
+    </div>
+    <div class="mbar">
+      <div class="tabs">
+        <div class="tab active">3D Brain</div>
+        <div class="tab">Time Series</div>
+      </div>
+      <span class="elapsed">⏱ 04:22</span>
+      <div class="btn-stop" style="padding:5px 14px;border-radius:20px;font-size:0.78rem;font-weight:700;">■ 측정 종료</div>
+    </div>
+    <div class="content">
+      <div class="brain-panel">
+        <div class="bm-controls">
+          <div class="btn-mode active">HbO</div>
+          <div class="btn-mode">HbR</div>
+          <div class="divider" style="background:#e8e2d8"></div>
+          <div class="btn-mode active">2D</div>
+          <div class="btn-mode">3D</div>
+          <div class="divider" style="background:#e8e2d8"></div>
+          <div class="colorbar-row"><span>−5</span><div class="cb-grad"></div><span>+5</span></div>
+        </div>
+        <div class="brain-placeholder" style="background:#f0ede6;">
+          <svg viewBox="0 0 340 290">
+            <ellipse cx="170" cy="130" rx="120" ry="110" fill="#e8e0d4" stroke="#d8cfc2" stroke-width="1.5"/>
+            <ellipse cx="170" cy="128" rx="105" ry="95" fill="#e2d9cc" stroke="none"/>
+            <radialGradient id="d1" cx="36%" cy="52%" r="18%"><stop offset="0%" stop-color="#4e7aff" stop-opacity="0.5"/><stop offset="100%" stop-color="#4e7aff" stop-opacity="0"/></radialGradient>
+            <radialGradient id="d2" cx="64%" cy="52%" r="18%"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.55"/><stop offset="100%" stop-color="#ef4444" stop-opacity="0"/></radialGradient>
+            <radialGradient id="d3" cx="38%" cy="65%" r="15%"><stop offset="0%" stop-color="#93c5fd" stop-opacity="0.4"/><stop offset="100%" stop-color="#93c5fd" stop-opacity="0"/></radialGradient>
+            <radialGradient id="d4" cx="62%" cy="65%" r="15%"><stop offset="0%" stop-color="#ef4444" stop-opacity="0.38"/><stop offset="100%" stop-color="#ef4444" stop-opacity="0"/></radialGradient>
+            <rect width="340" height="290" fill="url(#d1)"/>
+            <rect width="340" height="290" fill="url(#d2)"/>
+            <rect width="340" height="290" fill="url(#d3)"/>
+            <rect width="340" height="290" fill="url(#d4)"/>
+            <text x="122" y="148" font-size="9" fill="#78716c" font-family="system-ui" text-anchor="middle">Ch1</text>
+            <text x="218" y="148" font-size="9" fill="#78716c" font-family="system-ui" text-anchor="middle">Ch2</text>
+            <text x="128" y="186" font-size="9" fill="#78716c" font-family="system-ui" text-anchor="middle">Ch3</text>
+            <text x="212" y="186" font-size="9" fill="#78716c" font-family="system-ui" text-anchor="middle">Ch4</text>
+            <rect x="100" y="256" width="140" height="34" fill="#000" rx="4"/>
+            <text x="170" y="268" font-size="8" fill="#9ca3af" font-family="system-ui" text-anchor="middle">집중도</text>
+            <text x="170" y="283" font-size="13" font-weight="700" fill="#ef4444" font-family="system-ui" text-anchor="middle">높음</text>
+          </svg>
+        </div>
+        <div class="caption">전전두엽(PFC) HbO — baseline 대비: Blue(↓) → White → Red(↑)</div>
+      </div>
+      <div class="report-snip">
+        <div>
+          <div class="section-lbl">세션 요약</div>
+          <div class="info-cards">
+            <div class="ic"><div class="ic-lbl">이름</div><div class="ic-val">홍길동</div></div>
+            <div class="ic"><div class="ic-lbl">나이</div><div class="ic-val">28세</div></div>
+            <div class="ic"><div class="ic-lbl">측정 날짜</div><div class="ic-val">2026.04.15</div></div>
+            <div class="ic"><div class="ic-lbl">측정 시간</div><div class="ic-val">7분 12초</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="section-lbl">전체 집중도</div>
+          <div class="score-row">
+            <div class="score-ring" style="font-size:0.88rem;">72</div>
+            <div class="score-meta" style="flex:1">
+              <div class="score-ttl">집중도 지수 — 양호</div>
+              <div class="score-bar"><div class="score-fill"></div></div>
+              <div style="font-size:0.6rem;opacity:0.65;margin-top:2px;">HbO 신호가 안정적으로 상승하였습니다.</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="section-lbl">부위별 분석</div>
+          <div class="region-boxes">
+            <div class="rb"><div class="rb-name">좌측 전두엽 전방</div><div class="rb-txt">언어 처리 영역이 활발하게 반응하였습니다.</div></div>
+            <div class="rb"><div class="rb-name">우측 전두엽 전방</div><div class="rb-txt">안정적인 수준으로 고르게 활성화되었습니다.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

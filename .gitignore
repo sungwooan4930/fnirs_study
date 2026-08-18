@@ -5,12 +5,29 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-data/
-reports/
 .superpowers/
 *.h5
-*.csv
 *.log
+
+# === 연구 데이터 — 개인정보/IRB. 절대 커밋 금지 ===
+data/
+results/
+reports/
+*.snirf
+*.edf
+*.vhdr
+*.vmrk
+*.eeg
+*.fif
+*.set
+*.fdt
+participants_identifiable*
+*_identifiable*
+
+# CSV: 원시/파생 데이터는 제외하되 설정·자극 목록은 허용
+*.csv
+!config/**/*.csv
+!src/stimulus/**/*.csv
 *.egg-info/
 dist/
 build/
@@ -30,3 +47,7 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Claude Code 개인 설정 (팀 공유 대상 아님)
+.claude/settings.local.json
+.claude/worktrees/

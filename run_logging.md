@@ -286,3 +286,70 @@ cd web && npm run dev
 
 ### 커밋
 - `feat(web): 프로필 입력 단계 추가 (이름·나이) — Report에 반영`
+
+---
+
+## 2026-08-18 — 프로젝트 전면 재정의 & 하네스 엔지니어링
+
+### 배경
+연구계획서 원본(`docs/plan/…2차수정본.pdf`, 11쪽)을 처음으로 코드베이스에 반영.
+기존 구현이 계획서와 **다른 프로젝트**임이 확인되어 전면 재설계 결정.
+
+| 항목 | 기존 구현 (폐기) | 연구계획서 |
+|------|-----------------|-----------|
+| 정체성 | 4ch 커스텀 fNIRS 집중도 측정기(제품) | 멀티모달 AI 인지상태 추정 연구과제 |
+| fNIRS | 4ch, 3파장(780/850/950), BLE | 48ch, 전두·두정·운동·후두, 10.4 Hz |
+| EEG | 없음 | 30ch, 10-5, 1,000 Hz |
+| 동기화 / 표준 | 자체 타임스탬프 / 자체 HDF5 | LSL / BIDS |
+| 출력 | 집중도 1차원 | 6차원 인지상태 벡터 |
+| 모델 | SimpleHbOIndex(규칙식) | 융합 3전략 비교 + 크로스모달 어텐션 CNN-LSTM, LOSO-CV |
+| XAI / 교수전략 | 없음 | SHAP·어텐션 / 규칙-데이터 하이브리드 추론 |
+| 대시보드 사용자 | 측정 대상자 본인 | 교수자(다수 학습자 동시 모니터링) |
+
+### 완료 — 하네스 구축
+- **`CLAUDE.md` 신규 작성** — 계획서를 코딩 규약으로 번역한 최상위 프로젝트 문서.
+  도메인 사전(6차원 벡터·4계층 라벨·모달 스펙), 파이프라인 규약(전처리·윈도우·융합 3전략·검증·XAI·교수전략 규칙),
+  연구코드 절대규칙(누수 방지·재현성·개인정보·보고 정직성), 목표 디렉토리 구조, 미확정 6건, 절대금지 9건.
+- **`.claude/skills/leakage-check`** — 데이터 누수 7항목 점검 스킬.
+  5초창·1초스텝 = 80% 오버랩이라 누수 시 정확도가 허구로 치솟는 구조적 위험에 대응.
+- **`.claude/skills/research-log`** — 본 로그 기록 규약. 실험 기록 시 CV 방식·chance level·최악 피험자 성능 필수화.
+- **`.claude/settings.json`** — 안전 명령 allowlist + `data/raw`·원시신호 파일 read/write deny.
+- **`.gitignore` 강화** — `.snirf/.edf/.fif/.eeg` 등 뇌신호 포맷, `results/`, 식별정보 패턴 차단.
+- **메모리 교정** — 기존 메모리가 "4채널 fNIRS 집중도 측정기"를 기술해 매 세션 오염 중이었음. 전면 교체 + 계획서 참조 메모리 신규 추가.
+- **문서 재배치** — 구 `PROJECT_GUIDELINES.md`·`docs/superpowers/` → `docs/legacy/`. 신규 `docs/{plan,specs,plans,protocol}/` 생성.
+
+### 결정 사항
+| 항목 | 결정 | 근거 | 대안 (기각 사유) |
+|------|------|------|-----------------|
+| 계획서 권위 | 계획서 > CLAUDE.md > 코드 | 연구과제는 계획서가 계약 | 코드 우선 (계획서 이탈 위험) |
+| 구 코드 | `docs/legacy/`로 문서 아카이브, 코드는 처리 방침 미정 | 이력 보존 | 즉시 삭제 (되돌릴 수 없음) |
+| Read deny 범위 | `data/raw/**` + 신호파일 확장자만 | BIDS sidecar·participants.tsv 조회는 정당 | `data/**` 전면 (메타데이터 작업 불가) |
+
+### 계획서 연계
+전 목표(1~5) 공통 기반. 아직 목표 1(지표 정의·프로토콜) 착수 전.
+
+### 미해결 (CLAUDE.md §9와 동기화)
+- [ ] **참가자 수 계획서 내부 불일치** — 요약·목표2는 100명, 추진전략§3·예산(30,000원×30명)은 30명
+- [ ] 실제 보유 장비 모델명 (EEG 30ch / fNIRS 48ch) — LSL 드라이버·몽타주 결정에 필요
+- [ ] 대시보드 스택 (React+FastAPI vs Streamlit/Dash)
+- [ ] fNIRS 48ch 몽타주 (소스-디텍터 배치, SDS, 파장)
+- [ ] "3수준 분류"의 정의 (인지부하 저/중/고인지, 6차원 각각인지)
+- [ ] 구 4ch 코드 처리 방침 (`legacy_4ch/` 아카이브 vs 삭제)
+- [ ] `.claude/launch.json`이 폐기된 web/·Qt 앱을 참조 중 — 대시보드 스택 확정 후 갱신
+
+### 추가 결정 (사용자 확인)
+| 항목 | 결정 | 영향 |
+|------|------|------|
+| 착수 지점 | **목표 3 — 전처리 + 모델 파이프라인** | 데이터 수집(목표1·2)을 기다리지 않고 병렬 진행 |
+| 하드웨어 | **시뮬레이션 우선(Simulation-First)** | 합성 신호 + LSL 모킹으로 전 파이프라인 개발, 장비 확보 후 드라이버만 교체(HAL) |
+| 구 4ch 코드 | `legacy_4ch/`로 아카이브 | `src/ web/ tests/ config/ refer/ run.bat requirements*.txt lovable-*.md` 이동 |
+| 참가자 수 | **미확정 유지** | 하드코딩 금지. `config`의 `n_subjects`로만 취급, 합성 생성기는 임의 N 수용 |
+
+### 아카이브 실행 내역
+- `git mv`로 이력 보존하며 `legacy_4ch/` 이동. `legacy_4ch/README.md`에 폐기 사유·재사용 가능 범위(mBLL/필터 로직 참조만)·금지사항 명시.
+- 루트 PDF 중복본은 `docs/plan/` 사본과 SHA256 동일 확인 후 삭제.
+- `requirements.txt` 신규 작성 — MNE / MNE-NIRS / mne-bids / pyprep / pylsl / scikit-learn / XGBoost / PyTorch / SHAP.
+- `docs/superpowers/` → `docs/legacy/superpowers_4ch/`. 신규 `docs/{plan,specs,plans,protocol}/` 생성.
+
+### 다음 단계
+목표 3 착수 — 개발 프로세스(§6)에 따라 `superpowers:brainstorming`부터 시작.

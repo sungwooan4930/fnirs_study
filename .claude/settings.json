@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(.venv/Scripts/pip.exe:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(mypy:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)"
+    ],
+    "deny": [
+      "Read(./data/raw/**)",
+      "Read(./data/**/*.snirf)",
+      "Read(./data/**/*.edf)",
+      "Read(./data/**/*.eeg)",
+      "Read(./data/**/*.fif)",
+      "Read(./data/**/*identifiable*)",
+      "Write(./data/raw/**)",
+      "Edit(./data/raw/**)",
+      "Bash(rm -rf data/**)",
+      "Bash(rm -rf results/**)"
+    ]
+  }
+}

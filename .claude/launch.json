@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Web (Vite dev server)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "web"],
+      "port": 5173
+    },
+    {
+      "name": "Brainstorm (Visual Companion)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/sungw/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/server.cjs", "--project-dir", "D:/Study_fNIRS"],
+      "port": 50864
+    },
+    {
+      "name": "Theme Preview (static)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8877", "--directory", "web/public"],
+      "port": 8877
+    },
+    {
+      "name": "Qt App (PySide6)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "src.main"],
+      "port": null
+    }
+  ]
+}
