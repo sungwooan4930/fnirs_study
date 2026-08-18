@@ -702,6 +702,14 @@ within(0.9870) > LOSO(0.6225). **문턱은 하나도 조정하지 않았다.**
   있었다 — `CLAUDE.md` §5.4가 필수로 요구하는 지표가 두 CV 방식 중 하나에서
   아무 정보도 담지 못한 상태였다. 층화 배정으로 해소.
 
+### 테스트
+`.venv/Scripts/pytest.exe -v` (slow 포함): **195 passed in 742.95s (0:12:22)** —
+실패 0. 이전 176 → 195 (신규 19개: 층화·단일클래스 가드 9, run_id 3, 난수열 1,
+config 키 소비/유도 3, 중첩 스키마 키 3). **문턱은 하나도 조정하지 않았다** —
+T1~T4 검증 테스트 전부가 수정 이후 수치로 그대로 통과했다.
+로그: `.superpowers/sdd/2026-08-18-simulation-testbed/fixwave-testlog.txt`,
+리포트: `.superpowers/sdd/2026-08-18-simulation-testbed/fixwave-report.md`
+
 ### 다음 단계 (기존 목록에 추가)
 - [ ] **창-오버랩 누수 분리 실험(B로 이월)** — 피험자 내부에서 창을 무작위
   분할하는 분할기를 만들어 subject-identity를 상수로 고정한 뒤 부풀림을 측정.
