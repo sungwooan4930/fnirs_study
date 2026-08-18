@@ -1,10 +1,15 @@
 import json
 
+import numpy as np
 import pytest
 import yaml
 
 from src.common.seeding import set_all_seeds
+from src.datasets.labels import build_labels
+from src.datasets.windowing import make_windows
 from src.evaluation.runner import build_dataset, run_experiment
+from src.simulation.recording import generate_dataset
+import src.evaluation.runner as runner_module
 
 BASE_CFG = {
     "run_name": "unit",
@@ -88,11 +93,19 @@ def test_env_records_git_and_seed(tmp_path):
 
 
 def test_same_seed_gives_identical_metrics(tmp_path):
+    """metrics.json 전체가 동일해야 한다.
+
+    pooled_accuracy 하나만 비교하면 accuracy_worst·confusion·
+    worst_fold_subjects·n_windows_dropped 같은 다른 키가 갈라져도
+    통과한다. T4(개인차 스윕)는 config 차이에서 나온 metrics.json 간
+    차이를 연구 결론으로 읽으므로, 같은 시드에서 나오는 비결정성은
+    여기서 잡혀야지 결과로 둔갑해서는 안 된다.
+    """
     a = run_experiment(_cfg_file(tmp_path / "a", tmp_path / "ra"))
     b = run_experiment(_cfg_file(tmp_path / "b", tmp_path / "rb"))
     ma = json.loads((a / "metrics.json").read_text(encoding="utf-8"))
     mb = json.loads((b / "metrics.json").read_text(encoding="utf-8"))
-    assert ma["pooled_accuracy"] == mb["pooled_accuracy"]
+    assert ma == mb
 
 
 def test_overrides_are_applied(tmp_path):
@@ -115,3 +128,61 @@ def test_disabled_guards_mark_run_unsafe(tmp_path):
     assert out.name.endswith("-UNSAFE")
     metrics = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
     assert metrics["guards_disabled"] is True
+
+
+def test_git_unavailable_records_unknown_not_clean(tmp_path, monkeypatch):
+    """git 조회가 실패하면 '알 수 없음'을 '깨끗함'으로 위장하지 않는다.
+
+    _git이 예외를 삼키고 빈 문자열을 돌려주던 예전 동작이면 commit이
+    "nogit", dirty가 False가 되어 "clean하고 커밋된 코드에서 실행됨"으로
+    읽힌다 — 실제로는 아무것도 확인되지 않았는데도. None을 돌려주게
+    고치면 git_available=False, git_dirty=None(3값 논리의 '모름')이
+    기록되어야 한다.
+    """
+    monkeypatch.setattr(runner_module, "_git", lambda *args: None)
+
+    out = run_experiment(_cfg_file(tmp_path, tmp_path / "results"))
+    env = json.loads((out / "env.json").read_text(encoding="utf-8"))
+    assert env["git_available"] is False
+    assert env["git_dirty"] is None
+    assert "nogit" in out.name
+    # guards는 여전히 켜져 있으므로 UNSAFE는 아니다 — git 미상과는 별개 축
+    assert not out.name.endswith("-UNSAFE")
+
+
+def test_build_dataset_preserves_row_alignment():
+    """subject_id·trial_id·특징 행이 keep 마스크를 거친 뒤에도 정렬되어 있는지 확인한다.
+
+    features/labels에는 정확한 keep을 적용하고 subject_ids에는 어긋난
+    keep을 적용하는 버그가 있어도 전체 길이는 똑같이 유지될 수 있다
+    (WindowedDataset의 길이 검사는 이런 종류의 어긋남을 잡지 못한다).
+    같은 시드로 녹화를 독립적으로 다시 만들어 각 피험자의 trial_id
+    시퀀스를 직접 재계산하고, build_dataset이 내놓은 결과에서 같은
+    피험자로 필터링한 행과 원소 단위로 비교한다. 정렬이 한 칸이라도
+    어긋나면 길이나 값이 달라져 실패한다.
+    """
+    seed = 123
+    ds, _ = build_dataset(BASE_CFG, set_all_seeds(seed))
+
+    # build_dataset과 동일한 시드로 녹화열을 독립적으로 재현
+    recordings = generate_dataset(BASE_CFG["simulation"], set_all_seeds(seed))
+
+    win_cfg = BASE_CFG["windowing"]
+    lead_delta_s = float(BASE_CFG["simulation"]["lead_delta_s"])
+    rt_bins = list(BASE_CFG["dataset"]["rt_bins"])
+
+    ds_subjects = ds.get_subject_ids()
+    ds_trials = ds.get_trial_ids()
+
+    assert len(recordings) > 0
+    for rec in recordings:
+        windows = make_windows(rec.timeline, win_cfg["window_s"], win_cfg["step_s"])
+        _, keep = build_labels(
+            rec, windows, lead_delta_s=lead_delta_s, rt_bins=rt_bins
+        )
+        expected_trials = windows.trial_id[keep]
+
+        actual_trials = ds_trials[ds_subjects == rec.subject_id]
+        assert np.array_equal(actual_trials, expected_trials), (
+            f"row misalignment detected for subject {rec.subject_id}"
+        )

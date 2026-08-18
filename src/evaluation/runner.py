@@ -31,13 +31,28 @@ from src.simulation.recording import generate_dataset
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _git(*args: str) -> str:
+def _git(*args: str) -> str | None:
+    """git 명령을 실행한다. 실패하면 빈 문자열이 아니라 None을 돌려줘서
+    "git이 없다"와 "git 출력이 비어 있다"를 구분한다 — 후자를 clean으로
+    오인하면 실제로는 알 수 없는 상태를 clean/tracked로 위장하게 된다.
+
+    인코딩은 명시적으로 utf-8을 쓴다. Windows 콘솔 코드페이지(cp949)에
+    맡기면 `git diff`에 한글 커밋 메시지·주석이 섞였을 때 디코딩이
+    실패해 별도 스레드에서 조용히 죽고 stdout이 None으로 돌아온다 —
+    "git 상태 조회 실패"가 아니라 "결과 없음"으로 위장되는 것과 같은
+    문제라서 여기서도 errors="replace"로 방어하고, stdout이 그래도
+    None이면 실패로 취급한다.
+    """
     try:
-        return subprocess.run(
-            ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, timeout=10
-        ).stdout.strip()
+        result = subprocess.run(
+            ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=10,
+        )
     except (OSError, subprocess.SubprocessError):
-        return ""
+        return None
+    if result.stdout is None:
+        return None
+    return result.stdout.strip()
 
 
 def _deep_update(base: dict, extra: dict) -> dict:
@@ -104,8 +119,14 @@ def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
     guards = cfg["evaluation"]["guards"]
     guards_disabled = not all(bool(v) for v in guards.values())
 
-    commit = _git("rev-parse", "--short", "HEAD") or "nogit"
-    dirty = bool(_git("status", "--porcelain"))
+    commit_raw = _git("rev-parse", "--short", "HEAD")
+    status_raw = _git("status", "--porcelain")
+    git_available = commit_raw is not None and status_raw is not None
+    commit = commit_raw or "nogit"
+    # dirty는 3값 논리다: git 조회가 실패하면 "깨끗함"을 조작해내지 않고
+    # None(알 수 없음)으로 남긴다. run_id에는 여전히 "nogit"이 노출되어
+    # 디렉토리 이름만 봐도 provenance가 불확실하다는 것이 드러난다.
+    dirty: bool | None = bool(status_raw) if git_available else None
 
     run_id = f"{cfg['run_name']}_seed{seed}_{commit}"
     if dirty:
@@ -151,9 +172,10 @@ def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
                 "python": sys.version.split()[0],
                 "platform": platform.platform(),
                 "numpy": np.__version__,
+                "git_available": git_available,
                 "git_commit": commit,
                 "git_dirty": dirty,
-                "git_diff": _git("diff") if dirty else "",
+                "git_diff": (_git("diff") or "") if dirty else "",
             },
             indent=2,
             ensure_ascii=False,
