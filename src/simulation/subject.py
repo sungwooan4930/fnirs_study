@@ -35,7 +35,12 @@ def make_subjects(
         raise ValueError(f"subject_variance must be >= 0, got {subject_variance}")
 
     sd = float(np.sqrt(subject_variance))
-    thetas = rng.normal(0.0, sd, size=n_subjects) if sd > 0 else np.zeros(n_subjects)
+    # sd == 0에서도 분기하지 않고 항상 rng.normal을 호출한다. np.zeros는
+    # 생성기 상태를 소모하지 않지만 rng.normal은 scale과 무관하게 소모하므로,
+    # 분기를 두면 τ²=0 조건만 다른 난수열 위에서 돌게 된다 — 블록 순서도
+    # 노이즈도 달라져 T4의 개인차 스윕이 단일 변수 조작이 아니게 된다.
+    # scale=0이면 normal은 정확히 0을 돌려주므로 결과값은 동일하다.
+    thetas = rng.normal(0.0, sd, size=n_subjects)
 
     return [
         SubjectProfile(subject_id=f"sub-{i + 1:02d}", theta=float(t))
