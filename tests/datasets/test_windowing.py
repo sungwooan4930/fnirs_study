@@ -37,10 +37,15 @@ def test_no_window_crosses_a_block_boundary():
     assert np.array_equal(start_trial, end_trial)
 
 
-def test_label_matches_block_load():
+def test_label_constant_across_window():
+    """Load must be constant across the entire window for the label to be unambiguous."""
     tl = _timeline()
     w = make_windows(tl, window_s=5.0, step_s=1.0)
-    assert np.array_equal(w.load_level, tl.load_at(w.start_s))
+    # Check that load at start == load at end (within window) == recorded label
+    load_at_start = tl.load_at(w.start_s)
+    load_at_end = tl.load_at(w.end_s - 1e-6)
+    assert np.array_equal(load_at_start, load_at_end), "Load must be constant within window"
+    assert np.array_equal(w.load_level, load_at_start), "Label must match load at start"
 
 
 def test_count_matches_expected():
@@ -64,3 +69,23 @@ def test_rejects_step_larger_than_window():
 def test_rejects_window_longer_than_block():
     with pytest.raises(ValueError, match="no windows"):
         make_windows(_timeline(), window_s=100.0, step_s=1.0)
+
+
+def test_discards_boundary_crossing_windows():
+    """Windows that straddle block boundaries must be explicitly discarded."""
+    tl = _timeline()
+    # For 30-second blocks and 5-second windows, starts at 26-29 within
+    # each block cross into the next (ends at 31-34).
+    w = make_windows(tl, window_s=5.0, step_s=1.0)
+
+    # The first block spans [0, 30). Windows starting at 26, 27, 28, 29
+    # would end at 31, 32, 33, 34 (outside the block). They should be absent.
+    block_boundary_starts = np.array([26.0, 27.0, 28.0, 29.0])
+    safe_start = 20.0  # Within block, ends at 25.0
+
+    for start in block_boundary_starts:
+        assert not np.any(np.isclose(w.start_s, start)), \
+            f"Window starting at {start} crosses block boundary and should be discarded"
+
+    assert np.any(np.isclose(w.start_s, safe_start)), \
+        f"Safe window starting at {safe_start} should be retained"

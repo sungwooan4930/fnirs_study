@@ -34,8 +34,14 @@ def make_windows(timeline, window_s: float, step_s: float) -> WindowIndex:
             f"step_s ({step_s}) > window_s ({window_s}) would skip samples; "
             "계획서는 5초 창·1초 스텝을 명시한다"
         )
+    if window_s > timeline.duration_s:
+        raise ValueError(
+            f"window_s ({window_s}) > duration_s ({timeline.duration_s}): "
+            "no windows fit inside a block"
+        )
 
-    starts = np.arange(0.0, timeline.duration_s - window_s + 1e-9, step_s)
+    n_windows = int(round((timeline.duration_s - window_s) / step_s)) + 1
+    starts = np.arange(n_windows) * step_s
     ends = starts + window_s
 
     start_trial = timeline.trial_at(starts)
@@ -44,8 +50,7 @@ def make_windows(timeline, window_s: float, step_s: float) -> WindowIndex:
 
     if not keep.any():
         raise ValueError(
-            f"no windows fit inside a block: window_s={window_s} is likely "
-            "longer than block_duration_s"
+            f"no windows fit inside a block: all {len(starts)} generated windows cross block boundaries"
         )
 
     starts = starts[keep]
