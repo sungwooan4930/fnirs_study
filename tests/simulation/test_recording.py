@@ -86,37 +86,50 @@ def test_subjects_have_different_timelines():
 
 
 def test_eeg_contains_erp_component():
-    """Sanity check that EEG signal contains non-zero activity at stimulus latencies.
+    """Verify ERP component via exact residual extraction and unmodulated channel check.
 
-    The EEG recording should contain signal energy at stimulus times (where ERP
-    is injected), not just flat/zero. This is a basic check that the component
-    generation is actually adding something to the signal, not being skipped.
+    The ERP is recoverable by replaying build_timeline + generate_eeg_oscillation
+    with an identically seeded generator, then subtracting from rec.eeg. This
+    yields the pure ERP signal, uncontaminated by background oscillations.
+
+    Assertions:
+    1. Unmodulated channels (indices ≥10) have zero residual (ERP only on ch 0-9)
+    2. Modulated channels have non-zero ERP (fails if ERP line is dropped)
     """
+    from src.simulation.components.eeg_oscillation import generate_eeg_oscillation
+    from src.simulation.state import build_timeline
+
+    # Generate full recording (full RNG consumption path)
     rng = set_all_seeds(0)
-    sub = make_subjects(1, 0.5, rng)[0]
+    sub = make_subjects(1, 0.0, rng)[0]
     rec = generate_recording(sub, SIM_CFG, rng)
 
-    # Check that at least some stimulus times have significant signal
-    sfreq = rec.eeg_sfreq
-    stim_onsets_samples = np.round(rec.timeline.stim_onsets * sfreq).astype(int)
+    # Replay only first two components (timeline + oscillation) with fresh seeded RNG
+    rng2 = set_all_seeds(0)
+    sub2 = make_subjects(1, 0.0, rng2)[0]
+    tl2 = build_timeline(SIM_CFG["task"], rng2)
+    osc = generate_eeg_oscillation(
+        tl2, sub2, rng2,
+        sfreq=float(SIM_CFG["eeg"]["sfreq_hz"]),
+        n_channels=int(SIM_CFG["eeg"]["n_channels"]),
+        effect_size=float(SIM_CFG["effect_size"]),
+    )
 
-    # Around stimulus onset (±100ms), measure peak signal
-    peak_measurements = []
-    for onset in stim_onsets_samples[:20]:  # First 20 stimuli
-        start = max(0, onset - int(0.1 * sfreq))
-        end = min(rec.eeg.shape[1], onset + int(0.1 * sfreq))
-        if end > start:
-            window = rec.eeg[0, start:end]  # Channel 0 (modulated)
-            peak_measurements.append(np.max(np.abs(window)))
+    # ERP residual = full recording minus oscillation-only
+    residual = rec.eeg - osc
 
-    # With ERP, we expect peaks > 1 µV at stimulus times
-    # Without ERP, peaks might be lower but still non-zero due to oscillations
-    mean_peak = np.mean(peak_measurements) if peak_measurements else 0
+    # Unmodulated channels (≥10) should have zero residual
+    # (N_MODULATED_EEG=10, so only ch 0-9 receive ERP)
+    unmod_residual_max = np.max(np.abs(residual[10:, :]))
+    assert unmod_residual_max < 1e-8, (
+        f"Unmodulated channel residual should be zero, got max={unmod_residual_max:.2e}. "
+        f"Replay is out of step with generate_recording."
+    )
 
-    # This threshold will pass as long as oscillations are present (ERP or not)
-    # It's mainly a sanity check that the EEG is being generated at all
-    assert mean_peak > 0.5, (
-        f"EEG signal too small at stimulus times (mean peak={mean_peak:.3f}µV). "
-        f"Expected at least 0.5 µV from oscillations+ERP. "
-        f"Check that signal generation is not entirely broken."
+    # Modulated channels (0-9) should have non-zero ERP
+    # P300_AMPLITUDE=1.0, so expect peaks ~0.3-1.0 µV after modulation and load variation
+    mod_residual_max = np.max(np.abs(residual[:10, :]))
+    assert mod_residual_max > 0.1, (
+        f"Modulated channels ERP residual too small ({mod_residual_max:.4f}µV). "
+        f"If generate_eeg_erp term was dropped from the EEG sum, this fails."
     )
