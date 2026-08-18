@@ -1,0 +1,23 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.2, pluggy-1.6.0 -- D:\Study_fNIRS\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+PySide6 6.7.0 -- Qt runtime 6.7.0 -- Qt compiled 6.7.0
+rootdir: D:\Study_fNIRS
+configfile: pytest.ini
+plugins: qt-4.5.0
+collecting ... collected 9 items
+
+tests/evaluation/test_harness.py::test_returns_one_result_per_fold PASSED [ 11%]
+tests/evaluation/test_harness.py::test_result_records_test_subjects_and_sizes PASSED [ 22%]
+tests/evaluation/test_harness.py::test_separable_data_beats_chance PASSED [ 33%]
+tests/evaluation/test_harness.py::test_non_separable_data_is_near_chance PASSED [ 44%]
+tests/evaluation/test_harness.py::test_guards_on_reject_window_random_splitter PASSED [ 55%]
+tests/evaluation/test_harness.py::test_guards_off_allow_window_random_splitter PASSED [ 66%]
+tests/evaluation/test_harness.py::test_make_model_rejects_unknown_name PASSED [ 77%]
+tests/evaluation/test_harness.py::test_single_class_fold_is_rejected PASSED [ 88%]
+tests/evaluation/test_harness.py::test_within_subject_runs_with_both_guards_on PASSED [100%]
+
+============================== 9 passed in 1.45s ==============================
+........................................................................ [ 51%]
+.....................................................................    [100%]
+141 passed in 5.13s
