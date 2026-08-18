@@ -117,6 +117,35 @@ def test_overrides_are_applied(tmp_path):
     assert saved["simulation"]["subject_variance"] == 3.0
 
 
+def test_overrides_change_the_run_directory(tmp_path):
+    """오버라이드가 다르면 결과 디렉토리도 달라야 한다.
+
+    run_id가 run_name·seed·commit만 담으면 T4 스윕 6개 조건이 전부
+    같은 디렉토리를 가리키고 mkdir(exist_ok=True)가 조용히 통과해
+    metrics.json이 차례로 덮어써진다. 5개가 파괴되고 마지막 하나만
+    남는데, 그 하나는 내부적으로 일관되어 아무 이상도 드러나지 않는다
+    (스펙 7.2 · CLAUDE.md 5.2).
+    """
+    cfg = _cfg_file(tmp_path, tmp_path / "results")
+    base = run_experiment(cfg)
+    varied = run_experiment(cfg, overrides={"simulation": {"subject_variance": 3.0}})
+    assert base.name != varied.name
+    assert base.resolve() != varied.resolve()
+
+
+def test_same_config_reuses_the_same_run_directory(tmp_path):
+    """해시는 실효 config에서만 나온다 — 같은 실험은 같은 디렉토리다."""
+    cfg = _cfg_file(tmp_path, tmp_path / "results")
+    assert run_experiment(cfg).name == run_experiment(cfg).name
+
+
+def test_results_dir_does_not_change_the_run_id(tmp_path):
+    """어디에 저장하느냐는 실험의 정체성이 아니다."""
+    a = run_experiment(_cfg_file(tmp_path / "a", tmp_path / "ra"))
+    b = run_experiment(_cfg_file(tmp_path / "b", tmp_path / "rb"))
+    assert a.name == b.name
+
+
 def test_disabled_guards_mark_run_unsafe(tmp_path):
     cfg = json.loads(json.dumps(BASE_CFG))
     cfg["evaluation"]["guards"]["check_subject_overlap"] = False

@@ -8,6 +8,7 @@ config 스냅샷·시드·git commit·환경을 함께 저장하지 않으면 �
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import platform
 import subprocess
@@ -63,6 +64,26 @@ def _deep_update(base: dict, extra: dict) -> dict:
         else:
             out[key] = value
     return out
+
+
+def _config_hash(cfg: dict) -> str:
+    """오버라이드가 병합된 *실효* config의 짧은 해시.
+
+    run_id가 run_name·seed·commit만 담으면 오버라이드로 조건을 바꾼
+    실행들이 전부 같은 디렉토리를 가리킨다. mkdir(exist_ok=True)가
+    조용히 통과하고 metrics.json·config.yaml·per_fold.csv가 덮어써지므로,
+    T4 스윕 6개 조건을 기본 results/에 돌리면 5개가 파괴되고 마지막
+    하나만 살아남는다 — 게다가 살아남은 디렉토리는 내부적으로 일관되어
+    아무것도 잘못돼 보이지 않는다. 스펙 7.2와 CLAUDE.md 5.2
+    ("실험 1회 = 결과 디렉토리 1개") 위반이다.
+
+    output(결과 저장 위치)은 해시에서 제외한다. 어디에 쓰느냐는 실험의
+    정체성이 아니라 보관 위치일 뿐이고, 포함시키면 같은 실험을 다른
+    폴더에 쓰기만 해도 다른 실험처럼 보인다.
+    """
+    payload = {k: v for k, v in cfg.items() if k != "output"}
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+    return "cfg" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:8]
 
 
 def build_dataset(cfg: dict, rng: np.random.Generator) -> tuple[WindowedDataset, int]:
@@ -128,7 +149,7 @@ def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
     # 디렉토리 이름만 봐도 provenance가 불확실하다는 것이 드러난다.
     dirty: bool | None = bool(status_raw) if git_available else None
 
-    run_id = f"{cfg['run_name']}_seed{seed}_{commit}"
+    run_id = f"{cfg['run_name']}_seed{seed}_{commit}_{_config_hash(cfg)}"
     if dirty:
         run_id += "-dirty"
     if guards_disabled:
