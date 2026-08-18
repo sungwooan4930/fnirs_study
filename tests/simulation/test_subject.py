@@ -36,3 +36,18 @@ def test_profile_is_immutable():
     sub = make_subjects(1, 0.5, set_all_seeds(0))[0]
     with pytest.raises(dataclasses.FrozenInstanceError):
         sub.theta = 99.0
+
+
+def test_theta_sd_equals_sqrt_of_variance():
+    """Verify that theta sample SD equals sqrt(subject_variance), not variance itself.
+
+    Draws 2000 subjects at variance=4.0. Expected SD is 2.0.
+    Tolerance 0.15 accepts the correct sqrt() conversion but rejects
+    the un-sqrt'd value (4.0 would be 2.0 away, failing the assertion).
+    """
+    rng = set_all_seeds(42)
+    subs = make_subjects(2000, 4.0, rng)
+    thetas = np.array([s.theta for s in subs])
+    observed_sd = thetas.std(ddof=0)  # population std
+    expected_sd = np.sqrt(4.0)  # Should be 2.0
+    assert abs(observed_sd - expected_sd) < 0.15
