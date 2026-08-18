@@ -11,6 +11,7 @@ simulation:
     block_duration_s: 30
     n_blocks_per_level: 2
     stim_interval_s: 2.0
+  # 주의: EEG 샘플링 속도 250 Hz는 개발 속도 최적화. 정규 1000 Hz 파일럿 config는 Task 19에서 추가.
   eeg:   {n_channels: 30, sfreq_hz: 250}
   fnirs: {n_channels: 48, sfreq_hz: 10.4, hbr_coupling: -0.33}
 
