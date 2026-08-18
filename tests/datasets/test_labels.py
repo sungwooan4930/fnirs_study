@@ -82,3 +82,52 @@ def test_lead_target_comes_after_window_end():
         later = rec.behavior.onsets[rec.behavior.onsets >= win.end_s[i] + 1.2]
         assert len(later) > 0
         assert later[0] > win.end_s[i]
+
+
+def test_lead_target_selects_correct_stimulus():
+    """선행 타깃이 정확히 올바른 자극을 선택하는지 검증."""
+    rec, win, labels, keep = _setup(lead_delta_s=1.2)
+    onsets = rec.behavior.onsets
+
+    # 유효한 창 샘플에서 직접 선행 자극 인덱스 계산
+    for i in np.flatnonzero(keep)[:50]:
+        lead_time = win.end_s[i] + 1.2
+        expected_idx = np.searchsorted(onsets, lead_time, side="left")
+
+        # 정확도와 반응시간이 해당 자극의 값과 일치해야 함
+        assert labels["accuracy"][i] == rec.behavior.correct[expected_idx]
+        expected_latency = np.digitize(rec.behavior.rt[expected_idx], bins=RT_BINS)
+        assert labels["response_latency"][i] == expected_latency
+
+
+def test_keep_mask_exact_boundaries():
+    """keep 마스크가 정확히 선행 자극이 존재하는 창만 True인지 검증."""
+    rec, win, _, keep = _setup(lead_delta_s=1.2)
+    onsets = rec.behavior.onsets
+
+    # 독립적으로 계산한 유효 마스크
+    expected_keep = np.searchsorted(onsets, win.end_s + 1.2, side="left") < len(onsets)
+
+    assert np.array_equal(keep, expected_keep)
+
+
+def test_negative_lead_delta_raises_error():
+    """lead_delta_s < 0이면 ValueError를 발생시킨다."""
+    rec, win, _, _ = _setup()
+
+    try:
+        build_labels(rec, win, lead_delta_s=-0.5, rt_bins=RT_BINS)
+        assert False, "ValueError should have been raised"
+    except ValueError as e:
+        assert "lead_delta_s must be >= 0" in str(e)
+
+
+def test_response_latency_bin_mapping():
+    """rt_bins=[0.5, 0.8]에서 특정 RT가 올바른 bin으로 매핑되는지 확인."""
+    # np.digitize with bins=[0.5, 0.8] gives:
+    # x < 0.5 -> 0
+    # 0.5 <= x < 0.8 -> 1
+    # x >= 0.8 -> 2
+    assert np.digitize(0.4, bins=RT_BINS) == 0
+    assert np.digitize(0.65, bins=RT_BINS) == 1
+    assert np.digitize(0.9, bins=RT_BINS) == 2
