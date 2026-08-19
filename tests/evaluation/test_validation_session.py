@@ -202,34 +202,95 @@ def test_t2_injection_turning_drift_off_removes_the_collapse(tmp_path):
     )
 
 
+#: T2 결함 주입·ceiling_nodrift 계산에 공용으로 쓰는 "드리프트 완전 비활성"
+#: 오버라이드.
+_NO_DRIFT = {
+    "fnirs_gain_sigma": 0.0, "fnirs_offset_sigma": 0.0,
+    "eeg_gain_sigma": 0.0, "eeg_noise_sigma": 0.0,
+    "within_session_rate": 0.0,
+}
+
+#: fold_ci와 같은 t-임계값(df=2, session_recovery.yaml이 세션 3개라
+#: cross_session fold도 3개). 새 상수를 지어내는 게 아니라 fold_ci를 낼 때
+#: 이미 쓰인 값을 재사용해 "드리프트가 낸 손상이 유의미한가"를 잰다.
+_T_CRIT_DF2 = 4.303
+
+
 @pytest.mark.slow
 def test_t3_normalization_recovers_most_of_the_gap(tmp_path):
-    """정규화 후 세션 간 성능이 세션 내 성능 쪽으로 회복한다.
+    """정규화 후 세션 간 성능이 '드리프트가 없었다면 도달했을' 성능 쪽으로 회복한다.
 
-    상한은 같은 데이터의 within_subject 성능이다. 이 데이터에서 도달 가능한
-    최대치이므로, 절대 수치를 지어내지 않고도 '얼마나 회복했는가'를 물을 수 있다.
+    **상한을 `within_subject`에서 `드리프트 비활성 cross_session`으로 바꿨다**
+    (컨트롤러 정정 — 최초 브리프의 결함이지 구현 결함이 아니다). `within_subject`
+    는 같은 세션 **안에서** 블록만 나누는 분할이라, 모델이 그 세션의 채널
+    이득을 이미 본 채로 평가된다 — 세션을 가로지르는 문제(`cross_session`)와는
+    애초에 답하는 질문이 다르다. 실측이 이를 증명한다: 드리프트를 전부 꺼도
+    (`_NO_DRIFT`, off와 동일하게 정규화도 끔) cross_session은 ~0.51에 그쳐
+    within_subject(~0.86)에 크게 못 미친다 — 즉 원래 기준은 (a)드리프트가
+    낸 손상과 (b) "세션 간 vs 세션 내"라는 분할 방식 자체의 본질적 격차를
+    뒤섞어 재고 있었다. (b)까지 정규화 탓으로 돌리면 정규화가 완벽해도
+    영원히 실패하는 기준이 된다.
+
+    새 상한(`ceiling_nodrift`)은 "같은 분할기·같은 시드, 드리프트 시그마만
+    0" — 측정 드리프트가 없었다면 실제로 도달 가능했을 성능이다. seed가
+    같으므로 §5.5의 난수열 규율(드리프트를 꺼도 다른 난수열로 넘어가지
+    않음)이 여기서도 성립한다.
+
+    `within_subject`는 **맥락으로만** 실행해 실패 메시지에 함께 남긴다 —
+    이것과 `cross_session` 계열 수치를 같은 것으로 표기하지 않는다
+    (CLAUDE.md §5.4: 서로 다른 CV 방식을 혼용 표기 금지, 나란히·구분해서
+    보고).
     """
     off = _run({"preprocessing": {"baseline": {"normalize": False}}}, tmp_path / "off")
     on = _run({"preprocessing": {"baseline": {"normalize": True}}}, tmp_path / "on")
-    within = _run(
-        {"evaluation": {"splitter": "within_subject"}}, tmp_path / "within"
+    ceiling_nodrift = _run(
+        _deep_update(
+            {"preprocessing": {"baseline": {"normalize": False}}},
+            {"simulation": {"drift": _NO_DRIFT}},
+        ),
+        tmp_path / "ceiling_nodrift",
     )
-    chance = on["chance_level"]
+    # within_subject는 맥락용이다 — 상한이 아니다. 위 docstring 참조.
+    within = _run({"evaluation": {"splitter": "within_subject"}}, tmp_path / "within")
 
-    ceiling = within["pooled_accuracy"]
-    assert ceiling > chance, "세션 내 성능조차 chance라면 데이터에 신호가 없다"
+    assert ceiling_nodrift["cv_method"] == "cross_session"
+    assert off["cv_method"] == "cross_session"
 
-    recovered = (on["pooled_accuracy"] - chance) / (ceiling - chance)
+    # 드리프트가 실제로 손상을 냈는지 먼저 확인한다 — 손상이 없으면 회복도
+    # 공허하다. off 자신의 fold 수준 표준오차(fold_ci 폭에서 역산, df=2)보다
+    # 큰 차이를 요구한다 — 새 임계를 지어내지 않고 이미 있는 불확실성
+    # 추정을 재사용한다.
+    sem_off = (off["fold_ci_high"] - off["fold_ci_low"]) / (2 * _T_CRIT_DF2)
+    damage = ceiling_nodrift["pooled_accuracy"] - off["pooled_accuracy"]
+    assert damage > sem_off, (
+        f"드리프트가 낸 손상({damage:.4f})이 off 자신의 표준오차({sem_off:.4f})"
+        f"보다 작다 — ceiling_nodrift={ceiling_nodrift['pooled_accuracy']:.4f}, "
+        f"off={off['pooled_accuracy']:.4f}. 드리프트가 사실상 신호를 흔들지 "
+        "않았다면 T3의 '회복'은 아무것도 증명하지 못한다."
+    )
+
+    recovered = (on["pooled_accuracy"] - off["pooled_accuracy"]) / (
+        ceiling_nodrift["pooled_accuracy"] - off["pooled_accuracy"]
+    )
     assert recovered >= T3_GAP_RECOVERY_MIN, (
         f"회복률 {recovered:.3f} < {T3_GAP_RECOVERY_MIN}. "
         f"off={off['pooled_accuracy']:.4f} on={on['pooled_accuracy']:.4f} "
-        f"within={ceiling:.4f} chance={chance:.4f}"
+        f"ceiling_nodrift={ceiling_nodrift['pooled_accuracy']:.4f} "
+        f"chance={on['chance_level']:.4f} — 참고(상한 아님, cv_method 다름): "
+        f"within_subject={within['pooled_accuracy']:.4f}"
     )
 
 
 @pytest.mark.slow
 def test_t3_injection_foreign_baseline_fails_to_recover(tmp_path, monkeypatch):
-    """결함 주입: 다른 세션의 베이스라인으로 정규화하면 회복하지 못한다."""
+    """결함 주입: 다른 세션의 베이스라인으로 정규화하면 회복하지 못한다.
+
+    상한은 위 정정과 같은 이유로 `ceiling_nodrift`(드리프트 비활성
+    cross_session)를 쓴다. `off`·`ceiling_nodrift`는 `normalize: false`라
+    이 몽키패치(`SessionBaseline.fit`)의 영향을 받지 않는다 —
+    `build_dataset`이 `normalize`가 꺼져 있으면 `SessionBaseline`을 아예
+    호출하지 않기 때문이다.
+    """
     from src.preprocessing.baseline import SessionBaseline
 
     cache: dict = {}
@@ -242,11 +303,22 @@ def test_t3_injection_foreign_baseline_fails_to_recover(tmp_path, monkeypatch):
             return SessionBaseline(reference=reference, kind=kind)
 
     monkeypatch.setattr(runner_mod, "SessionBaseline", _ForeignBaseline)
+    off = _run({"preprocessing": {"baseline": {"normalize": False}}}, tmp_path / "off")
     on = _run({"preprocessing": {"baseline": {"normalize": True}}}, tmp_path / "foreign")
-    within = _run({"evaluation": {"splitter": "within_subject"}}, tmp_path / "within")
-    chance = on["chance_level"]
-    recovered = (on["pooled_accuracy"] - chance) / (within["pooled_accuracy"] - chance)
+    ceiling_nodrift = _run(
+        _deep_update(
+            {"preprocessing": {"baseline": {"normalize": False}}},
+            {"simulation": {"drift": _NO_DRIFT}},
+        ),
+        tmp_path / "ceiling_nodrift",
+    )
+    recovered = (on["pooled_accuracy"] - off["pooled_accuracy"]) / (
+        ceiling_nodrift["pooled_accuracy"] - off["pooled_accuracy"]
+    )
     assert recovered < T3_GAP_RECOVERY_MIN, (
         f"남의 세션 베이스라인으로 정규화했는데도 회복률 {recovered:.3f}를 "
-        "달성했다 — 정규화가 세션 고유 정보를 쓰고 있지 않다는 뜻이다."
+        f"달성했다 (off={off['pooled_accuracy']:.4f}, "
+        f"foreign-on={on['pooled_accuracy']:.4f}, "
+        f"ceiling_nodrift={ceiling_nodrift['pooled_accuracy']:.4f}) — "
+        "정규화가 세션 고유 정보를 쓰고 있지 않다는 뜻이다."
     )
