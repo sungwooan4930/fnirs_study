@@ -92,3 +92,46 @@ def test_discards_boundary_crossing_windows():
 
     assert np.any(np.isclose(w.start_s, safe_start)), \
         f"Safe window starting at {safe_start} should be retained"
+
+
+from src.datasets.windowing import make_windows
+from src.simulation.state import BASELINE, TASK, build_timeline
+
+_CFG = {
+    "nback_levels": [0, 2, 3],
+    "block_duration_s": 30,
+    "baseline_duration_s": 20,
+    "n_blocks_per_level": 2,
+    "stim_interval_s": 2.0,
+}
+
+
+def test_windows_carry_block_kind():
+    tl = build_timeline(_CFG, np.random.default_rng(0))
+    w = make_windows(tl, window_s=5.0, step_s=1.0)
+    assert len(w.block_kind) == len(w.start_s)
+    assert set(np.unique(w.block_kind)) == {BASELINE, TASK}
+
+
+def test_baseline_windows_lie_entirely_inside_baseline_blocks():
+    tl = build_timeline(_CFG, np.random.default_rng(0))
+    w = make_windows(tl, window_s=5.0, step_s=1.0)
+    base = w.block_kind == BASELINE
+    assert base.any()
+    assert (tl.kind_at(w.start_s[base]) == BASELINE).all()
+    assert (tl.kind_at(w.end_s[base] - 1e-6) == BASELINE).all()
+
+
+def test_both_baseline_blocks_produce_windows():
+    """시작·종료 베이스라인 둘 다 창을 내야 드리프트를 잴 수 있다."""
+    tl = build_timeline(_CFG, np.random.default_rng(0))
+    w = make_windows(tl, window_s=5.0, step_s=1.0)
+    base_trials = np.unique(w.trial_id[w.block_kind == BASELINE])
+    assert len(base_trials) == 2
+
+
+def test_baseline_shorter_than_window_is_rejected():
+    cfg = dict(_CFG, baseline_duration_s=3)
+    tl = build_timeline(cfg, np.random.default_rng(0))
+    with pytest.raises(ValueError, match="baseline block"):
+        make_windows(tl, window_s=5.0, step_s=1.0)

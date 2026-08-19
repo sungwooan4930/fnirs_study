@@ -14,13 +14,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from src.simulation.state import BASELINE, STATE_SFREQ
+
 
 @dataclass(frozen=True)
 class WindowIndex:
-    start_s: np.ndarray    # (n_win,)
-    end_s: np.ndarray      # (n_win,)
-    trial_id: np.ndarray   # (n_win,) int
-    load_level: np.ndarray  # (n_win,) int
+    start_s: np.ndarray     # (n_win,)
+    end_s: np.ndarray       # (n_win,)
+    trial_id: np.ndarray    # (n_win,) int
+    load_level: np.ndarray  # (n_win,) int — 베이스라인 창은 센티넬 -1
+    block_kind: np.ndarray  # (n_win,) int — BASELINE / TASK
 
 
 def make_windows(timeline, window_s: float, step_s: float) -> WindowIndex:
@@ -56,9 +59,20 @@ def make_windows(timeline, window_s: float, step_s: float) -> WindowIndex:
     starts = starts[keep]
     ends = ends[keep]
 
+    baseline_lengths = [
+        int((timeline.trial_id == t).sum()) / STATE_SFREQ
+        for t in np.unique(timeline.trial_id[timeline.block_kind == BASELINE])
+    ]
+    if baseline_lengths and min(baseline_lengths) < window_s:
+        raise ValueError(
+            f"baseline block is {min(baseline_lengths)}s but window_s is {window_s}s; "
+            "베이스라인에서 창이 하나도 나오지 않으면 정규화 기준 구간을 만들 수 없다"
+        )
+
     return WindowIndex(
         start_s=starts,
         end_s=ends,
         trial_id=timeline.trial_at(starts),
         load_level=timeline.load_at(starts),
+        block_kind=timeline.kind_at(starts),
     )
