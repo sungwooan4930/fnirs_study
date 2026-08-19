@@ -41,7 +41,16 @@ features:
 preprocessing:
   baseline:
     normalize: true
-    drift_threshold_relative: 0.20
+    # 2026-08-19 재보정 (Task 16, compute_drift 분모를 |mean(start)|에서
+    # std(start, ddof=1)로 고친 뒤): 단위가 "베이스라인 평균 대비 상대 비율"
+    # 에서 "베이스라인 표준편차 배수"로 바뀌어 0.20은 더 이상 맞는 자리가
+    # 아니다(실측: eeg 작은 군 0.63~0.79 vs 큰 군 3.52~4.22 — 0.20은 둘 다
+    # 아래). 2×2 실측(seed 42, 4피험자×4세션)에서 eeg는 작은 군 최댓값
+    # 0.788948, 큰 군 최솟값 3.515019로 깨끗이 분리된다 — 그 중간값
+    # (0.788948+3.515019)/2 = 2.151984 ≈ 2.15로 놓았다. fnirs는 여전히
+    # 두 군 사이에 값이 섞여(예: 세션0 sub-04=4.246897) 이 임계로도 T6의
+    # 2×2를 완전히는 못 채운다 — task-16-report.md·§8.4.1 "정정 5" 참조.
+    drift_threshold_relative: 2.15
     zero_atol: 1.0e-8
 
 dataset:

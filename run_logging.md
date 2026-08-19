@@ -1045,3 +1045,62 @@ PASS하고, 메인 판정 테스트는 실제 구현 결함 때문에 통과할 
 
 상세: `docs/specs/2026-08-19-session-baseline-design.md` §8.4.1 "정정 5",
 `.superpowers/sdd/2026-08-19-session-baseline/task-16-report.md`.
+
+### 2026-08-19 — Task 16 후속: 컨트롤러가 compute_drift 결함을 확정 — 분모를 평균에서 산포로 수정
+
+컨트롤러가 정정 5의 진단(fnirs 드리프트가 잡음 지배적)을 실재하는 결함으로
+판정하고 수정을 지시했다. `compute_drift`(`src/preprocessing/baseline.py`)의
+분모를 `|mean(start)|`에서 `std(start, ddof=1)`로 바꿨다 — fnirs 특징의
+"기울기" 성분은 베이스라인(고정점 응시)에서 평균이 정당하게 0 근처이므로,
+평균을 분모로 쓰면 발산한다.
+
+#### 완료
+- `compute_drift` 구현·docstring 수정
+- `tests/preprocessing/test_baseline.py`의 `compute_drift` 테스트 3개를
+  다중 창(std가 정의되도록) 데이터로 재작성, 결함을 직접 겨냥한 신규
+  테스트(`test_baseline_mean_near_zero_does_not_diverge_when_spread_is_
+  normal`) 및 산포-기준 배제 테스트·단일 창 예외 테스트 추가(순검사
+  통과: `tests/preprocessing` 19 passed)
+- `session_quality.yaml`의 `drift_threshold_relative`를 새 단위에 맞춰
+  0.20 → 2.15로 재보정(eeg 분리 구간의 중간값, 실측 기반)
+- T6 재측정, `xfail` 사유 갱신(원래 결함은 해소, 잔여 원인은 소표본
+  변동으로 재진단)
+- `null.yaml`(threshold 미변경)로 재확인: `n_sessions_flagged` 36/36 유지
+  — 옛 threshold(0.20)가 새 단위에서 전면적으로 어긋나 있다는 증거
+
+#### 결정 사항
+| 항목 | 결정 | 근거 | 대안 (기각 사유) |
+|------|------|------|-----------------|
+| T6 메인 테스트 | `xfail` 유지, 사유만 갱신 | fnirs가 여전히 완전히는 분리되지 않음(세션0 sub-04=4.246897 > 세션1 sub-02=4.222576) — 수학적으로 유효 임계 구간이 공집합 | n_subjects를 늘려 표본을 키움(더 많은 피험자가 outlier 위험도 늘려 반드시 개선된다는 보장이 없어 미채택 — 후속 조사로 남김) |
+| null.yaml 임계 | 건드리지 않음 | Task 16 config 범위는 session_quality.yaml뿐. 컨트롤러 지시는 "확인해 보고"이지 "고쳐라"가 아니었음 | 함께 재보정(범위 이탈 — 미채택, 후속 작업으로 명시) |
+
+**T6 실측 (새 정의, seed 42):**
+
+| 세션 | eeg 범위(4명) | fnirs 범위(4명) | 기대 | 새 임계(2.15) 결과 |
+|---|---|---|---|---|
+| 0 | 0.6275–0.7889 | 0.5454–**4.2469** | ✗ | sub-04 fnirs 때문에 1/4 오탐 |
+| 1 | 3.8894–4.2226 | 0.6105–4.9742 | ✓ | 전원 정탐(eeg로 충분) |
+| 2(핵심) | 0.6670–0.7728 | 0.4770–2.9295 | ✗ | sub-01·04 fnirs 때문에 2/4 오탐 |
+| 3 | 3.5150–4.0736 | 0.4995–2.1266 | ✓ | 전원 정탐(eeg로 충분) |
+
+원래 결함(구조적 발산, 어떤 임계로도 불가능 — 세션1 최솟값 2.12 < 세션2
+최댓값 168.48)과 지금 남은 문제(근소한 차이, 유효 구간 `[4.2226,
+4.2470)`이 공집합)는 **종류가 다르다.** 전자는 수정됐고, 후자는 후속
+조사(§운영 미해결) 대상으로 남긴다.
+
+#### 계획서 연계
+목표 3 — `SessionQuality.drift_flag`가 이제 eeg에서는 완전히 신뢰할 수
+있고, fnirs에서도 물리적으로 말이 되는 범위(더 이상 세 자릿수로 발산하지
+않음)로 개선됐다. 다만 fnirs 단독으로는 소표본에서 여전히 간헐적 오탐이
+남는다 — 대시보드 착수 전 표본 크기 또는 fnirs 집계 방식(예: 채널별
+robust 통계)을 재검토할 필요가 있다.
+
+#### 미해결
+- [ ] fnirs 드리프트 지표의 소표본 변동을 줄이는 방법(더 많은 subject-session
+      표본, 또는 median 같은 robust 집계) 조사 — 고쳐지면 T6의 `xfail`을
+      제거한다.
+- [ ] `null.yaml`·`session_recovery.yaml` 등 나머지 config의
+      `drift_threshold_relative`를 새 단위(SD 배수)에 맞게 일괄 재보정.
+
+상세: `docs/specs/2026-08-19-session-baseline-design.md` §8.4.1 "정정 6",
+`.superpowers/sdd/2026-08-19-session-baseline/task-16-report.md`.

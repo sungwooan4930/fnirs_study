@@ -117,27 +117,78 @@ def test_modality_kind_covers_the_three_modalities():
     assert set(MODALITY_KIND.values()) <= set(NORMALIZATION_KINDS)
 
 
-def test_drift_is_a_relative_ratio():
-    start = np.array([[10.0, 100.0]])
-    end = np.array([[11.0, 100.0]])
+def test_drift_is_relative_to_baseline_spread_not_baseline_mean():
+    """2026-08-19 정정(Task 16): 분모가 |mean(start)|에서 std(start, ddof=1)로
+    바뀌었다 — fnirs '기울기' 특징처럼 베이스라인 평균이 정당하게 0 근처인
+    채널도 정상적으로 다루기 위함(아래 test_baseline_mean_near_zero_does_not_
+    diverge_when_spread_is_normal 참조).
+
+    채널0: 시작 [9, 11](mean=10, std(ddof=1)=sqrt(2)), 종료 [10, 12](mean=11)
+      → drift = |11-10| / sqrt(2) = 1/sqrt(2)
+    채널1: 시작 [100, 100](mean=100, std=0 — 창마다 상수) → 산포가 0이므로
+      종료값과 무관하게 제외된다.
+    """
+    start = np.array([[9.0, 100.0], [11.0, 100.0]])
+    end = np.array([[10.0, 100.0], [12.0, 105.0]])
     d = compute_drift(start, end, zero_atol=1e-8)
-    assert np.allclose(d.per_channel, [0.1, 0.0])
-    assert d.aggregate == pytest.approx(0.05)
+
+    expected_ch0 = abs(11.0 - 10.0) / (2.0 ** 0.5)
+    assert d.per_channel[0] == pytest.approx(expected_ch0)
+    assert np.isnan(d.per_channel[1])
+    assert d.aggregate == pytest.approx(expected_ch0)
+    assert d.n_excluded == 1
+
+
+def test_baseline_mean_near_zero_does_not_diverge_when_spread_is_normal():
+    """이 결함을 직접 겨냥한 테스트(컨트롤러 지시).
+
+    베이스라인 평균이 정확히 0이어도(기울기 특징이 안정 상태에서 그렇듯)
+    산포가 정상이면 드리프트가 발산하지 않고, 채널이 제외되지도 않는다.
+    옛 구현(분모 = |mean(start)|)이었다면 이 채널은 |mean|=0이 zero_atol
+    이하라 즉시 제외됐거나, 살아남았더라도 근사-영 분모 때문에 값이
+    발산했을 것이다.
+
+    채널: 시작 [-1, 1](mean=0, std(ddof=1)=sqrt(2)), 종료 [-0.5, 1.5](mean=0.5)
+      → drift = |0.5-0| / sqrt(2) = 0.5/sqrt(2) — 유한하고 작다.
+    """
+    start = np.array([[-1.0], [1.0]])
+    end = np.array([[-0.5], [1.5]])
+    d = compute_drift(start, end, zero_atol=1e-8)
+
+    assert start.mean(axis=0)[0] == pytest.approx(0.0)  # 전제 확인: 평균이 정말 0
+    expected = abs(0.5 - 0.0) / (2.0 ** 0.5)
     assert d.n_excluded == 0
+    assert np.isfinite(d.per_channel[0])
+    assert d.per_channel[0] == pytest.approx(expected)
+    assert d.aggregate == pytest.approx(expected)
 
 
-def test_near_zero_baseline_channels_are_excluded_and_counted():
-    start = np.array([[10.0, 0.0]])
-    end = np.array([[11.0, 5.0]])
+def test_near_zero_spread_channels_are_excluded_and_counted():
+    """산포가 수치적으로 0인(창마다 상수인) 채널만 제외 대상이다 — 평균이
+    아니라 산포 기준이라는 것을 채널 하나로 명시적으로 확인한다."""
+    start = np.array([[10.0, 5.0], [10.0, 7.0]])  # 채널0 상수, 채널1 std>0
+    end = np.array([[20.0, 6.0], [20.0, 8.0]])
     d = compute_drift(start, end, zero_atol=1e-8)
     assert d.n_excluded == 1
-    assert np.isnan(d.per_channel[1])
-    assert d.aggregate == pytest.approx(0.1)
+    assert np.isnan(d.per_channel[0])
+    assert np.isfinite(d.per_channel[1])
 
 
 def test_all_channels_excluded_yields_nan_not_a_quiet_zero():
-    start = np.zeros((1, 2))
-    end = np.ones((1, 2))
+    """모든 채널이 창마다 상수(산포 0)면 집계는 조용한 0이 아니라 nan이다."""
+    start = np.full((2, 2), 5.0)
+    end = np.full((2, 2), 9.0)
+    d = compute_drift(start, end, zero_atol=1e-8)
+    assert d.n_excluded == 2
+    assert np.isnan(d.aggregate)
+
+
+def test_single_window_baseline_cannot_establish_spread_and_is_excluded():
+    """시작 베이스라인 창이 1개뿐이면 표본 표준편차(ddof=1)가 정의되지
+    않는다(0/0). `SessionBaseline.fit`의 같은 경우 처리(0으로 시작해 하한
+    배제가 적용됨)와 대칭을 이룬다 — NaN으로 배제 로직을 무력화하지 않는다."""
+    start = np.array([[10.0, 100.0]])
+    end = np.array([[11.0, 105.0]])
     d = compute_drift(start, end, zero_atol=1e-8)
     assert d.n_excluded == 2
     assert np.isnan(d.aggregate)
