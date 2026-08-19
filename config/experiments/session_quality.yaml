@@ -2,11 +2,14 @@
 # 내(③) 드리프트를 독립으로 켜고 끄기 위해 세션 4개가 필요하다.
 # session_recovery.yaml(T2·T3용, assignment: sampled)을 베이스로 하되
 # n_subjects·n_sessions·drift 블록만 바꿨다.
+# n_subjects: 4 -> 8 (2026-08-19, 컨트롤러 지시). T6 판정을 "개별 녹화 완전
+# 분리"에서 "칸별 플래그 비율"로 바꾼 뒤(테스트 파일 참조) n=4에서는 비율이
+# 0/0.25/0.5/0.75/1.0 다섯 값만 가능해 추정이 거칠었다. 8이면 더 세분된다.
 run_name: session_quality
 seed: 42
 
 simulation:
-  n_subjects: 4
+  n_subjects: 8
   n_sessions: 4
   subject_variance: 0.5
   effect_size: 0.8
@@ -41,15 +44,18 @@ features:
 preprocessing:
   baseline:
     normalize: true
-    # 2026-08-19 재보정 (Task 16, compute_drift 분모를 |mean(start)|에서
-    # std(start, ddof=1)로 고친 뒤): 단위가 "베이스라인 평균 대비 상대 비율"
+    # 2026-08-19 재보정 (Task 16). compute_drift 분모를 |mean(start)|에서
+    # std(start, ddof=1)로 고치면서 단위가 "베이스라인 평균 대비 상대 비율"
     # 에서 "베이스라인 표준편차 배수"로 바뀌어 0.20은 더 이상 맞는 자리가
-    # 아니다(실측: eeg 작은 군 0.63~0.79 vs 큰 군 3.52~4.22 — 0.20은 둘 다
-    # 아래). 2×2 실측(seed 42, 4피험자×4세션)에서 eeg는 작은 군 최댓값
-    # 0.788948, 큰 군 최솟값 3.515019로 깨끗이 분리된다 — 그 중간값
-    # (0.788948+3.515019)/2 = 2.151984 ≈ 2.15로 놓았다. fnirs는 여전히
-    # 두 군 사이에 값이 섞여(예: 세션0 sub-04=4.246897) 이 임계로도 T6의
-    # 2×2를 완전히는 못 채운다 — task-16-report.md·§8.4.1 "정정 5" 참조.
+    # 아니었다. 2.15는 project-wide 값이다(컨트롤러 지시로 smoke·null·
+    # pilot·session_recovery·session_clean·session_quality 전부 동일하게
+    # 맞춤 — 지표가 스케일 자유이므로 config별로 다를 이유가 없다). 유도:
+    # 4피험자×4세션 실측에서 eeg 작은 군 최댓값 0.788948·큰 군 최솟값
+    # 3.515019의 중간값 (0.788948+3.515019)/2 = 2.151984 ≈ 2.15.
+    # 8피험자로 늘린 뒤 T6(비율 판정)을 이 임계로 재확인한 결과: 세션
+    # 0=0.250·1=1.000·2(핵심 칸)=0.125·3=1.000 — 전부 T6_NEGATIVE_FLAG_
+    # RATE_MAX(0.25)·T6_POSITIVE_FLAG_RATE_MIN(0.75) 안. task-16-report.md
+    # 참조.
     drift_threshold_relative: 2.15
     zero_atol: 1.0e-8
 

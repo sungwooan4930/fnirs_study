@@ -632,52 +632,52 @@ def _qualities_by_session():
     return by_session
 
 
-@pytest.mark.slow
-@pytest.mark.xfail(
-    reason=(
-        "2026-08-19 갱신(Task 16, compute_drift 분모를 |mean(start)|에서 "
-        "std(start, ddof=1)로 고친 뒤 재측정). 원래 결함(근사-영 평균 분모로 "
-        "인한 발산, fnirs 값이 최대 174까지 치솟던 것)은 해소됐다 — 이제 값은 "
-        "0.4~5 범위로 물리적으로 말이 된다. eeg는 여전히 깨끗이 분리된다(작은 "
-        "군 max=0.788948 < 큰 군 min=3.515019). 임계를 그 중간값 2.15로 "
-        "재보정했다(session_quality.yaml 주석 참조 — 단위가 '평균 대비 비율'"
-        "에서 '표준편차 배수'로 바뀌어 예전 0.20은 더 이상 맞는 자리가 아니다). "
-        "하지만 fnirs는 여전히 완전히는 분리되지 않는다 — 이번엔 자릿수 차이가 "
-        "아니라 근소한 차이다: 세션0 sub-04의 fnirs=4.246897(핵심 칸이 아닌 "
-        "'작은' 군에 있어야 하는데도 세션1 sub-02의 eeg=4.222576보다 크다) 하나 "
-        "때문에, '세션1 전원 플래그 AND 세션0·2 전원 비플래그'를 만족하는 "
-        "임계 구간이 [4.222576, 4.246897)로 존재하지 않는다(하한이 상한보다 "
-        "크다). 채널 분해로 확인: 이 값은 슬로프 특징 하나가 아니라 HbO 평균· "
-        "슬로프 둘 다에서 이 피험자·세션 조합이 유난히 크게 나온 것(mean_agg="
-        "5.51, slope_agg=2.99) — 특정 특징의 근사-영 분모 때문이 아니라 "
-        "n_subjects=4의 작은 표본에서 나온 피험자 간 생리적/표집 변동으로 "
-        "보인다(subject_variance=0.5). 원래 결함(구조적 발산, 세션·피험자 "
-        "무관하게 항상 임계를 넘음)과는 종류가 다르다 — 여전히 xfail로 남기되 "
-        "'compute_drift 수정 필요'가 아니라 '더 큰 표본 또는 더 견고한 fnirs "
-        "집계가 필요할 수 있음'으로 원인을 바꿔 기록한다. task-16-report.md "
-        "참조."
-    ),
-    strict=True,
-)
-def test_t6_flags_only_the_sessions_with_within_session_drift():
-    """2×2 배치 (스펙 §8.3).
+#: T6의 변별 요구 (2026-08-19 컨트롤러 정정 — 스펙 §8.3의 원안이 요구하던
+#: "개별 녹화의 완전 분리"는 개념이 요구하는 것보다 엄격했다. drift_flag는
+#: (피험자, 세션)마다 붙고 드리프트 크기는 피험자마다 다르므로, 핵심 음성
+#: 칸의 *모든* 피험자가 양성 칸의 *모든* 피험자보다 낮을 것을 요구하면
+#: n을 아무리 키워도 분포의 꼬리에서 실패한다. §8.3이 실제로 묻는 것은
+#: 민감도·특이도이므로 비율로 판정한다. 관측에서 역산한 값이 아니라 3:1
+#: 변별을 요구하는 사전 선언이다 — 핵심 음성 칸(①② 큼·③ 작음)에서 경고가
+#: 남발되면 아무도 안 보게 되므로 낮아야 하고, ③이 큰 칸에서는 실제로
+#: 잡아야 한다.
+T6_NEGATIVE_FLAG_RATE_MAX = 0.25
+T6_POSITIVE_FLAG_RATE_MIN = 0.75
 
-    세션 0: ①② 작음 · ③ 작음  → 플래그 ✗
-    세션 1: ①② 작음 · ③ 큼    → 플래그 ✓
-    세션 2: ①② 큼   · ③ 작음  → 플래그 ✗  ← 핵심 음성 칸
-    세션 3: ①② 큼   · ③ 큼    → 플래그 ✓
+
+@pytest.mark.slow
+def test_t6_flags_only_the_sessions_with_within_session_drift():
+    """2×2 배치 (스펙 §8.3, 판정은 비율 — 2026-08-19 컨트롤러 정정).
+
+    세션 0: ①② 작음 · ③ 작음  → 플래그 비율 ≤ T6_NEGATIVE_FLAG_RATE_MAX
+    세션 1: ①② 작음 · ③ 큼    → 플래그 비율 ≥ T6_POSITIVE_FLAG_RATE_MIN
+    세션 2: ①② 큼   · ③ 작음  → 플래그 비율 ≤ T6_NEGATIVE_FLAG_RATE_MAX  ← 핵심 음성 칸
+    세션 3: ①② 큼   · ③ 큼    → 플래그 비율 ≥ T6_POSITIVE_FLAG_RATE_MIN
     """
     by_session = _qualities_by_session()
-    flagged = {s: [q.drift_flag for q in qs] for s, qs in by_session.items()}
+    rate = {
+        s: sum(q.drift_flag for q in qs) / len(qs) for s, qs in by_session.items()
+    }
+    summary = ", ".join(f"세션{s}={rate[s]:.3f}" for s in sorted(rate))
 
-    assert not any(flagged[0]), "세션 0(드리프트 없음)이 플래그됐다 — 오탐"
-    assert all(flagged[1]), "세션 1(세션 내 드리프트 큼)이 플래그되지 않았다 — 미탐"
-    assert not any(flagged[2]), (
-        "세션 2가 플래그됐다. ①② 세션 간 드리프트는 정규화가 이미 처리하므로 "
-        "플래그 사유가 아니다 — drift_flag가 세션 간 드리프트를 세션 내 "
-        "드리프트로 오독하고 있다."
+    assert rate[0] <= T6_NEGATIVE_FLAG_RATE_MAX, (
+        f"세션 0(드리프트 없음)의 플래그 비율 {rate[0]:.3f}이 "
+        f"{T6_NEGATIVE_FLAG_RATE_MAX}를 넘었다 — 오탐 과다. 네 칸 실측: {summary}"
     )
-    assert all(flagged[3]), "세션 3(세션 내 드리프트 큼)이 플래그되지 않았다 — 미탐"
+    assert rate[1] >= T6_POSITIVE_FLAG_RATE_MIN, (
+        f"세션 1(세션 내 드리프트 큼)의 플래그 비율 {rate[1]:.3f}이 "
+        f"{T6_POSITIVE_FLAG_RATE_MIN} 미만이다 — 미탐 과다. 네 칸 실측: {summary}"
+    )
+    assert rate[2] <= T6_NEGATIVE_FLAG_RATE_MAX, (
+        f"세션 2(핵심 음성 칸)의 플래그 비율 {rate[2]:.3f}이 "
+        f"{T6_NEGATIVE_FLAG_RATE_MAX}를 넘었다. ①② 세션 간 드리프트는 정규화가 "
+        f"이미 처리하므로 플래그 사유가 아니다 — drift_flag가 세션 간 드리프트를 "
+        f"세션 내 드리프트로 오독하고 있다는 뜻이다. 네 칸 실측: {summary}"
+    )
+    assert rate[3] >= T6_POSITIVE_FLAG_RATE_MIN, (
+        f"세션 3(세션 내 드리프트 큼)의 플래그 비율 {rate[3]:.3f}이 "
+        f"{T6_POSITIVE_FLAG_RATE_MIN} 미만이다 — 미탐 과다. 네 칸 실측: {summary}"
+    )
 
 
 @pytest.mark.slow

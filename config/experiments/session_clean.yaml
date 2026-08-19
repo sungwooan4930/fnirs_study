@@ -51,7 +51,7 @@ features:
 preprocessing:
   baseline:
     normalize: true
-    drift_threshold_relative: 0.20
+    drift_threshold_relative: 2.15
     zero_atol: 1.0e-8
 
 dataset:
