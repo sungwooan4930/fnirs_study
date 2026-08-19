@@ -984,3 +984,64 @@ foreign-on=0.4435, ceiling_nodrift=0.5743 → 회복률 0.192(< 0.5, PASS).
 
 상세: `docs/specs/2026-08-19-session-baseline-design.md` §8.2·§8.4·§8.4.1·§12,
 `.superpowers/sdd/2026-08-19-session-baseline/task-14-report.md`.
+
+### 2026-08-19 — Task 16: 승인기준 T5(누수)·T6(신뢰도 플래그) — T6은 compute_drift 결함으로 xfail 처리
+
+`config/experiments/session_quality.yaml` 신규(4피험자·4세션·
+`drift.assignment: fixed_2x2`), `tests/evaluation/test_validation_session.py`에
+T5 3개·T6 2개 추가. **T5는 3개 전부 PASS. T6은 결함 주입 테스트(0-임계)만
+PASS하고, 메인 판정 테스트는 실제 구현 결함 때문에 통과할 수 없어
+`xfail(strict=True)`로 남겼다** — 임계를 조정해 억지로 통과시키지 않았다.
+
+#### 완료
+- T5: `check_normalization_source`가 베이스라인 옵트인 데이터셋(`include_baseline
+  =True`, target=`accuracy`)에서 `LeakageError`를 던지는 것, 가드를 끄면 실제로
+  통과해버리는 것(결함 주입), `SessionBaseline.fit` 서명이 다른 세션을 받을 수
+  없는 것(§6.1) 세 가지를 확인
+- T6: 2×2 고정 배치(`fixed_2x2`, 세션2 = ①②큼·③작음 핵심 음성 칸) config를
+  만들고 세션별 `drift_by_modality`를 실측
+- 컨트롤러가 사전에 지시한 분기("세션2가 세션1·3만큼 크면 §6.3 구현 문제 —
+  임계를 만지지 말고 보고")를 따라 진단하고, 실제로 그 경우임을 확인
+- `docs/specs/2026-08-19-session-baseline-design.md` §8.4.1에 "정정 5" 추가 —
+  실측표·수학적 반증·원인 진단 전체 기록
+
+#### 결정 사항
+| 항목 | 결정 | 근거 | 대안 (기각 사유) |
+|------|------|------|-----------------|
+| T6 메인 테스트 처리 | `xfail(strict=True)`로 남기고 임계는 브리프 원안(0.20) 유지 | eeg만 놓고 보면 0.20은 이미 올바르다(작은 군 max 0.1374 < 0.20 < 큰 군 min 0.5836) — 조정할 근거가 없다. fnirs는 어떤 임계로도 핵심 칸을 못 살린다(수학적 반증: 세션1 fnirs 최솟값 2.12 < 세션2 fnirs 최댓값 168.48) | 임계를 168 이상으로 올림(세션1도 비플래그돼 T6 자체가 무의미해짐 — 미채택) · 테스트 삭제(브리프가 명시한 승인기준을 조용히 지우는 것 — CLAUDE.md 정직성 위반) · fnirs를 flag_drift에서 제외(Task 16 파일 범위 밖의 소스 수정 — 미채택) |
+| fnirs 결함 소스 수정 여부 | 하지 않음 | Task 16 파일 범위는 config·테스트뿐(태스크 브리프 Files 목록). `compute_drift`/`features_minimal.py` 수정은 별도 태스크 필요 | 이번 태스크에서 함께 고침 (범위 이탈 — 미채택) |
+
+**T6 실측 (session_quality.yaml, seed 42, 4피험자×4세션):**
+
+| 세션 | ①② | ③ | eeg 집계(4명) | fnirs 집계(4명) | 기대 | 실제(임계 0.20) |
+|---|---|---|---|---|---|---|
+| 0 | 작음 | 작음 | 0.1056–0.1374 | 2.76–32.80 | ✗ | ✓ (fnirs 때문에 오탐) |
+| 1 | 작음 | 큼 | 0.6446–0.6678 | 2.12–169.64 | ✓ | ✓ |
+| 2(핵심) | 큼 | 작음 | 0.1189–0.1329 | 1.59–168.48 | ✗ | ✓ (fnirs 때문에 오탐) |
+| 3 | 큼 | 큼 | 0.5836–0.6631 | 3.19–23.27 | ✓ | ✓ |
+
+드리프트를 전부 0으로 꺼도 fnirs 값은 여전히 3.4~174 범위(세션·피험자 무관) —
+①②③ 어느 드리프트와도 무관한 잡음이라는 뜻. 원인: `fnirs` 특징이 `[HbO 평균
+| HbO 기울기]`를 이어붙이는데, 베이스라인 구간의 "기울기"는 참값이 0 근처라
+`compute_drift`의 상대 비율(`\|end-start\|/\|start\|`)이 근사-영 분모로
+발산한다. `zero_atol`(1e-8)은 이 스케일의 잡음을 걸러내기엔 너무 느슨하다.
+36/36(session_quality 기준 16/16) 플래그의 원인은 **nan이 아니라 임계 초과다**
+(`n_excluded_by_modality`가 항상 0으로 확인됨) — 다만 그 "초과"가 실제 신호가
+아니라 잡음이라는 것이 문제다.
+
+#### 계획서 연계
+목표 3(§계획서 5-8개월, XAI 대시보드·검증) — CLAUDE.md §3.8·§3.5(교수자가
+임계 조정 가능)이 전제하는 `drift_flag`가 fnirs 모달리티에서 현재 신뢰할 수
+없다는 것을 발견. §6.3이 "에포크→데이터셋→결과→대시보드까지 따라간다"고
+규정한 값이므로, 후속 수정 전까지 대시보드에 fnirs 기반 플래그를 그대로
+노출하면 안 된다.
+
+#### 미해결
+- [ ] `compute_drift`(§6.3) 또는 fnirs 특징 설계(`features_minimal.py`)를
+      고쳐 fnirs 드리프트 지표가 실제 신호(①②③)와 상관되도록 한다 — 예:
+      `concentration_delta` 드리프트를 `hbo_mean` 서브셋에만 적용하거나,
+      기울기류 특징에는 다른 안정성 지표를 쓴다. 고친 뒤 T6 xfail을
+      제거한다(`strict=True`라 고쳐지면 XPASS로 실패해 알려준다).
+
+상세: `docs/specs/2026-08-19-session-baseline-design.md` §8.4.1 "정정 5",
+`.superpowers/sdd/2026-08-19-session-baseline/task-16-report.md`.

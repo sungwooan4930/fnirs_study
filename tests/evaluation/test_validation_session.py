@@ -548,3 +548,139 @@ def test_t4_injection_symmetric_kill_is_caught_by_ref_floor():
 
     with pytest.raises(AssertionError, match="비율을 계산할 근거가 없다"):
         _assert_ratio_valid(b_ref_dead, b_hat_dead, context="[대칭 주입] ")
+
+
+# ---------------------------------------------------------------- T5 누수
+
+from src.datasets.contract import LeakageError
+from src.evaluation.harness import run_folds
+from src.evaluation.splitters import CrossSessionSplitter
+
+ALL_GUARDS = {
+    "check_subject_overlap": True,
+    "check_window_overlap": True,
+    "check_session_overlap": True,
+    "check_normalization_source": True,
+}
+
+
+def _dataset_with_baseline_opted_in():
+    """베이스라인 창을 분석에 넣은 데이터셋.
+
+    러너는 이 조합을 거부하므로(부하 타깃의 chance level이 바뀐다) 여기서는
+    build_dataset을 직접 부르고 타깃을 accuracy로 바꿔 계약 객체만 얻는다.
+    """
+    cfg = load_config(RECOVERY)
+    cfg = _deep_update(cfg, {
+        "dataset": {"include_baseline": True, "targets": ["accuracy"]},
+        "preprocessing": {"baseline": {"normalize": True}},
+        "simulation": {"n_subjects": 3, "n_sessions": 2},
+    })
+    validate_config(cfg)
+    rng = set_all_seeds(int(cfg["seed"]))
+    dataset, _, _ = runner_mod.build_dataset(cfg, rng)
+    return dataset
+
+
+@pytest.mark.slow
+def test_t5_normalization_source_window_in_a_fold_is_rejected():
+    dataset = _dataset_with_baseline_opted_in()
+    with pytest.raises(LeakageError, match="normalization source"):
+        run_folds(
+            dataset, CrossSessionSplitter(),
+            target="accuracy", modalities=["eeg", "fnirs", "behavior"],
+            guards=ALL_GUARDS, seed=42,
+        )
+
+
+@pytest.mark.slow
+def test_t5_injection_disabling_the_guard_lets_it_through():
+    """결함 주입: 가드를 끄면 통과해버려야 한다.
+
+    통과하지 않으면 다른 무언가가 막고 있다는 뜻이고, 그러면 이 가드가
+    실제로 무엇을 지키는지 알 수 없다.
+    """
+    dataset = _dataset_with_baseline_opted_in()
+    results = run_folds(
+        dataset, CrossSessionSplitter(),
+        target="accuracy", modalities=["eeg", "fnirs", "behavior"],
+        guards={**ALL_GUARDS, "check_normalization_source": False}, seed=42,
+    )
+    assert len(results) >= 2
+
+
+def test_t5_fit_cannot_be_handed_another_session():
+    """서명 자체가 다른 세션을 받지 못한다 (스펙 §6.1)."""
+    import inspect
+
+    params = list(inspect.signature(SessionBaseline.fit).parameters)
+    assert params == ["start_baseline", "kind"]
+
+
+# ---------------------------------------------------------------- T6 신뢰도
+
+QUALITY = "config/experiments/session_quality.yaml"
+
+
+def _qualities_by_session():
+    cfg = load_config(QUALITY)
+    rng = set_all_seeds(int(cfg["seed"]))
+    _, _, qualities = runner_mod.build_dataset(cfg, rng)
+    by_session: dict[int, list] = defaultdict(list)
+    for q in qualities:
+        by_session[q.session_idx].append(q)
+    return by_session
+
+
+@pytest.mark.slow
+@pytest.mark.xfail(
+    reason=(
+        "compute_drift가 fnirs 모달리티에서 §6.3 정의와 달리 잡음 지배 값을 낸다. "
+        "실측(seed 42): eeg는 깨끗이 분리된다(작은 군 max=0.1374 < 임계 0.20 < "
+        "큰 군 min=0.5836) — 임계 0.20은 eeg에 대해서는 이미 올바르다. 하지만 "
+        "fnirs는 within_big·between_big 어느 쪽과도 상관없이 항상 임계를 넘는다 — "
+        "드리프트를 전부 0으로 꺼도(fnirs_gain=offset=eeg_gain=eeg_noise="
+        "within_session_rate=0) fnirs 값이 3.4~174 범위에 그대로 남는다(세션·"
+        "피험자 무관). 원인은 fnirs 특징 벡터가 [HbO 평균 | HbO 기울기]를 이어 "
+        "붙이는데(src/datasets/features_minimal.py), 베이스라인 구간의 '기울기' "
+        "특징은 정의상 0 근처라 compute_drift의 상대 비율(§6.3: "
+        "||end-start||/||start||)이 근사-영 분모로 발산한다 — zero_atol(1e-8)은 "
+        "이 스케일의 잡음을 걸러내기엔 너무 느슨하다. 수학적으로도 어떤 단일 "
+        "임계도 핵심 음성 칸을 구할 수 없다: 세션1(플래그 대상) fnirs 최솟값 "
+        "2.12가 세션2(비플래그 대상, 핵심 칸) fnirs 최댓값 168.48보다 작다 — "
+        "겹치는 구간이 없다. 임계를 만지는 것으로 해결 불가 — Task 16 범위 밖의 "
+        "compute_drift/§6.3(또는 fnirs 특징 설계) 수정이 필요하다. "
+        "task-16-report.md 참조."
+    ),
+    strict=True,
+)
+def test_t6_flags_only_the_sessions_with_within_session_drift():
+    """2×2 배치 (스펙 §8.3).
+
+    세션 0: ①② 작음 · ③ 작음  → 플래그 ✗
+    세션 1: ①② 작음 · ③ 큼    → 플래그 ✓
+    세션 2: ①② 큼   · ③ 작음  → 플래그 ✗  ← 핵심 음성 칸
+    세션 3: ①② 큼   · ③ 큼    → 플래그 ✓
+    """
+    by_session = _qualities_by_session()
+    flagged = {s: [q.drift_flag for q in qs] for s, qs in by_session.items()}
+
+    assert not any(flagged[0]), "세션 0(드리프트 없음)이 플래그됐다 — 오탐"
+    assert all(flagged[1]), "세션 1(세션 내 드리프트 큼)이 플래그되지 않았다 — 미탐"
+    assert not any(flagged[2]), (
+        "세션 2가 플래그됐다. ①② 세션 간 드리프트는 정규화가 이미 처리하므로 "
+        "플래그 사유가 아니다 — drift_flag가 세션 간 드리프트를 세션 내 "
+        "드리프트로 오독하고 있다."
+    )
+    assert all(flagged[3]), "세션 3(세션 내 드리프트 큼)이 플래그되지 않았다 — 미탐"
+
+
+@pytest.mark.slow
+def test_t6_injection_zero_threshold_destroys_specificity():
+    """결함 주입: 임계를 0으로 낮추면 전부 플래그되어 특이도가 무너져야 한다."""
+    cfg = load_config(QUALITY)
+    cfg = _deep_update(cfg, {"preprocessing": {"baseline": {"drift_threshold_relative": 0.0}}})
+    validate_config(cfg)
+    rng = set_all_seeds(int(cfg["seed"]))
+    _, _, qualities = runner_mod.build_dataset(cfg, rng)
+    assert all(q.drift_flag for q in qualities)

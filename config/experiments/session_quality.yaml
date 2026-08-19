@@ -1,0 +1,64 @@
+# T5·T6 전용. T6은 2×2 배치(assignment: fixed_2x2)로 세션 간(①②)·세션
+# 내(③) 드리프트를 독립으로 켜고 끄기 위해 세션 4개가 필요하다.
+# session_recovery.yaml(T2·T3용, assignment: sampled)을 베이스로 하되
+# n_subjects·n_sessions·drift 블록만 바꿨다.
+run_name: session_quality
+seed: 42
+
+simulation:
+  n_subjects: 4
+  n_sessions: 4
+  subject_variance: 0.5
+  effect_size: 0.8
+  lead_delta_s: 1.2
+  task:
+    nback_levels: [0, 2, 3]
+    block_duration_s: 30
+    baseline_duration_s: 20
+    n_blocks_per_level: 2
+    stim_interval_s: 2.0
+  practice:
+    rate: 0.15
+  drift:
+    fnirs_gain_sigma: 0.20
+    fnirs_offset_sigma: 0.10
+    eeg_gain_sigma: 0.15
+    eeg_noise_sigma: 0.15
+    within_session_rate: 0.30
+    within_session_fraction: 0.33
+    between_session_scale: 4.0
+    assignment: fixed_2x2
+  eeg:   {n_channels: 30, sfreq_hz: 250}
+  fnirs: {n_channels: 48, sfreq_hz: 10.4, hbr_coupling: -0.33}
+
+windowing:
+  window_s: 5.0
+  step_s: 1.0
+
+features:
+  extractor: minimal
+
+preprocessing:
+  baseline:
+    normalize: true
+    drift_threshold_relative: 0.20
+    zero_atol: 1.0e-8
+
+dataset:
+  targets: [cognitive_load]
+  lead_targets: [accuracy, response_latency]
+  modalities: [eeg, fnirs, behavior]
+  rt_bins: [0.5, 0.8]
+  include_baseline: false
+
+evaluation:
+  splitter: cross_session
+  model: logistic_regression
+  guards:
+    check_subject_overlap: true
+    check_window_overlap: true
+    check_session_overlap: true
+    check_normalization_source: true
+
+output:
+  results_dir: results
