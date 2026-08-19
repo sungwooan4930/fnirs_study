@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from src.common.config import load_config
+from src.common.config import load_config, validate_config
 from src.common.seeding import set_all_seeds
 from src.datasets.contract import WindowedDataset
 from src.datasets.extractors import get_extractor
@@ -137,6 +137,10 @@ def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
     cfg = load_config(config_path)
     if overrides:
         cfg = _deep_update(cfg, overrides)
+        # P1: 병합 후 반드시 재검증한다. 하지 않으면 오타 난 오버라이드 키가
+        # 조용히 통과하고, _config_hash만 바뀌어 새 결과 디렉토리가 생긴다 —
+        # 아무 손잡이도 돌리지 않은 실행이 별개 조건처럼 기록된다.
+        validate_config(cfg)
 
     targets = list(cfg["dataset"]["targets"])
     if len(targets) != 1:

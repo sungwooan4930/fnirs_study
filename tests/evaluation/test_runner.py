@@ -7,6 +7,7 @@ import yaml
 from src.common.seeding import set_all_seeds
 from src.datasets.labels import build_labels
 from src.datasets.windowing import make_windows
+from src.common.config import ConfigError
 from src.evaluation.runner import build_dataset, run_experiment
 from src.simulation.recording import generate_dataset
 import src.evaluation.runner as runner_module
@@ -16,30 +17,56 @@ BASE_CFG = {
     "seed": 7,
     "simulation": {
         "n_subjects": 4,
+        "n_sessions": 2,
         "subject_variance": 0.5,
         "effect_size": 0.8,
         "lead_delta_s": 1.2,
         "task": {
             "nback_levels": [0, 2, 3],
             "block_duration_s": 20,
+            "baseline_duration_s": 20,
             "n_blocks_per_level": 1,
             "stim_interval_s": 2.0,
+        },
+        "practice": {"rate": 0.15},
+        "drift": {
+            "fnirs_gain_sigma": 0.20,
+            "fnirs_offset_sigma": 0.10,
+            "eeg_gain_sigma": 0.15,
+            "eeg_noise_sigma": 0.15,
+            "within_session_rate": 0.30,
+            "within_session_fraction": 0.33,
+            "between_session_scale": 4.0,
+            "assignment": "sampled",
         },
         "eeg": {"n_channels": 8, "sfreq_hz": 100},
         "fnirs": {"n_channels": 8, "sfreq_hz": 10.4, "hbr_coupling": -0.33},
     },
     "windowing": {"window_s": 5.0, "step_s": 1.0},
     "features": {"extractor": "minimal"},
+    "preprocessing": {
+        "baseline": {
+            "normalize": True,
+            "drift_threshold_relative": 0.20,
+            "zero_atol": 1.0e-8,
+        },
+    },
     "dataset": {
         "targets": ["cognitive_load"],
         "lead_targets": ["accuracy", "response_latency"],
         "modalities": ["eeg", "fnirs", "behavior"],
         "rt_bins": [0.5, 0.8],
+        "include_baseline": False,
     },
     "evaluation": {
         "splitter": "loso",
         "model": "logistic_regression",
-        "guards": {"check_subject_overlap": True, "check_window_overlap": True},
+        "guards": {
+            "check_subject_overlap": True,
+            "check_window_overlap": True,
+            "check_session_overlap": True,
+            "check_normalization_source": True,
+        },
     },
     "output": {"results_dir": "results"},
 }
@@ -282,4 +309,17 @@ def test_build_dataset_preserves_row_alignment():
         actual_trials = ds_trials[ds_subjects == rec.subject_id]
         assert np.array_equal(actual_trials, expected_trials), (
             f"row misalignment detected for subject {rec.subject_id}"
+        )
+
+
+def test_typo_in_overrides_is_rejected_not_silently_absorbed():
+    """P1: 오버라이드가 스키마 검증을 우회하면 오타 키가 조용히 통과한다.
+
+    조용히 통과하면 config 해시만 바뀌어 새 결과 디렉토리가 생기고,
+    아무 손잡이도 돌리지 않은 실행이 별개 조건인 것처럼 기록된다.
+    """
+    with pytest.raises(ConfigError, match=r"unknown key 'simulation\.n_sesions'"):
+        run_experiment(
+            "config/experiments/smoke.yaml",
+            overrides={"simulation": {"n_sesions": 3}},
         )

@@ -29,30 +29,56 @@ SCHEMA: dict[str, Any] = {
     "seed": None,
     "simulation": {
         "n_subjects": None,
+        "n_sessions": None,
         "subject_variance": None,
         "effect_size": None,
         "lead_delta_s": None,
         "task": {
             "nback_levels": None,
             "block_duration_s": None,
+            "baseline_duration_s": None,
             "n_blocks_per_level": None,
             "stim_interval_s": None,
+        },
+        "practice": {"rate": None},
+        "drift": {
+            "fnirs_gain_sigma": None,
+            "fnirs_offset_sigma": None,
+            "eeg_gain_sigma": None,
+            "eeg_noise_sigma": None,
+            "within_session_rate": None,
+            "within_session_fraction": None,
+            "between_session_scale": None,
+            "assignment": None,
         },
         "eeg": {"n_channels": None, "sfreq_hz": None},
         "fnirs": {"n_channels": None, "sfreq_hz": None, "hbr_coupling": None},
     },
     "windowing": {"window_s": None, "step_s": None},
     "features": {"extractor": None},
+    "preprocessing": {
+        "baseline": {
+            "normalize": None,
+            "drift_threshold_relative": None,
+            "zero_atol": None,
+        },
+    },
     "dataset": {
         "targets": None,
         "lead_targets": None,
         "modalities": None,
         "rt_bins": None,
+        "include_baseline": None,
     },
     "evaluation": {
         "splitter": None,
         "model": None,
-        "guards": {"check_subject_overlap": None, "check_window_overlap": None},
+        "guards": {
+            "check_subject_overlap": None,
+            "check_window_overlap": None,
+            "check_session_overlap": None,
+            "check_normalization_source": None,
+        },
     },
     "output": {"results_dir": None},
 }
@@ -81,6 +107,22 @@ def _check_required(node: Any, schema: Any, path: str) -> None:
         _check_required(node[key], sub, f"{full}.")
 
 
+def validate_config(cfg: dict) -> None:
+    """이미 dict인 config를 스키마에 대해 검증한다.
+
+    `load_config`가 파일을 읽은 뒤 호출하는 것과 같은 검사다. 오버라이드를
+    병합한 뒤에도 같은 검사를 돌릴 수 있도록 분리했다 — 병합 후 검증하지
+    않으면 오타 난 키가 조용히 흡수되고, config 해시만 바뀌어 아무 손잡이도
+    돌리지 않은 실행이 별개 조건으로 기록된다.
+    """
+    if not isinstance(cfg, dict):
+        raise ConfigError(f"top level must be a mapping, got {type(cfg).__name__}")
+    _check_node(cfg, SCHEMA, "")
+    _check_required(cfg, SCHEMA, "")
+    if isinstance(cfg["seed"], bool) or not isinstance(cfg["seed"], int):
+        raise ConfigError(f"seed must be int, got {type(cfg['seed']).__name__}")
+
+
 def load_config(path: str | Path) -> dict:
     """YAML config를 읽고 스키마를 검증해 반환한다."""
     path = Path(path)
@@ -90,10 +132,5 @@ def load_config(path: str | Path) -> dict:
     if not isinstance(cfg, dict):
         raise ConfigError(f"{path}: top level must be a mapping")
 
-    _check_node(cfg, SCHEMA, "")
-    _check_required(cfg, SCHEMA, "")
-
-    if isinstance(cfg["seed"], bool) or not isinstance(cfg["seed"], int):
-        raise ConfigError(f"seed must be int, got {type(cfg['seed']).__name__}")
-
+    validate_config(cfg)
     return cfg
