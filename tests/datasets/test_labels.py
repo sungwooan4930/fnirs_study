@@ -4,6 +4,7 @@ from src.common.seeding import set_all_seeds
 from src.datasets.labels import build_labels
 from src.datasets.windowing import make_windows
 from src.simulation.recording import generate_recording
+from src.simulation.session import SessionDriftParams, SessionPlan
 from src.simulation.subject import make_subjects
 
 SIM_CFG = {
@@ -24,10 +25,27 @@ SIM_CFG = {
 RT_BINS = [0.5, 0.8]
 
 
+def _neutral_plan(subject, sim_cfg):
+    """드리프트 없는 SessionPlan — 이 파일의 라벨 테스트는 신호 왜곡과 무관하다."""
+    n_eeg = int(sim_cfg["eeg"]["n_channels"])
+    n_fnirs = int(sim_cfg["fnirs"]["n_channels"])
+    drift = SessionDriftParams(
+        fnirs_gain=np.ones(n_fnirs),
+        fnirs_offset=np.zeros(n_fnirs),
+        eeg_gain=np.ones(n_eeg),
+        eeg_noise_scale=np.zeros(n_eeg),
+        within_rate=0.0,
+        between_big=False,
+        within_big=False,
+    )
+    return SessionPlan(subject=subject, session_idx=0, practice_gain=1.0, drift=drift)
+
+
 def _setup(lead_delta_s=1.2):
     rng = set_all_seeds(0)
     sub = make_subjects(1, 0.0, rng)[0]
-    rec = generate_recording(sub, SIM_CFG, rng)
+    plan = _neutral_plan(sub, SIM_CFG)
+    rec = generate_recording(plan, SIM_CFG, rng)
     win = make_windows(rec.timeline, 5.0, 1.0)
     labels, keep = build_labels(rec, win, lead_delta_s=lead_delta_s, rt_bins=RT_BINS)
     return rec, win, labels, keep
