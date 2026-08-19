@@ -189,10 +189,17 @@ effective_load = load_fraction(level) * (1 - practice_rate) ** session_idx
 ```python
 class SessionBaseline:
     @classmethod
-    def fit(cls, baseline_epochs, kind) -> SessionBaseline: ...
-    def apply(self, x, kind) -> np.ndarray: ...
-    def drift(self) -> SessionDrift: ...
+    def fit(cls, start_baseline, kind) -> SessionBaseline: ...
+    def apply(self, x) -> np.ndarray: ...            # kind는 fit에서 고정된다
+
+def compute_drift(start_baseline, end_baseline, *, zero_atol) -> SessionDrift: ...
 ```
+
+`kind`는 `fit`에서 한 번만 받는다. `apply`가 다시 받으면 fit과 다른 `kind`를 넘길
+수 있게 되고, 그건 의미 있는 사용처가 없으면서 조용히 틀릴 수 있는 경로다.
+
+드리프트는 두 베이스라인을 모두 봐야 하므로 `SessionBaseline`의 메서드가 아니라
+별도 함수다 — `fit`이 시작 베이스라인만 받는다는 §6.1의 요점을 지키기 위함이다.
 
 **`fit`은 한 세션의 베이스라인 에포크만 받는다.** 다른 세션·다른 피험자를 넘길
 인자가 존재하지 않는다. `TestView.fit()`이 무조건 예외를 던지는 것과 같은 발상 —
@@ -327,17 +334,22 @@ class SplitKeys:
 | 분할기 | `allows_same_subject` | `allows_same_session` | 용도 |
 |---|---|---|---|
 | `LosoSplitter` | ✗ | ✗ | 교차 피험자 일반화 |
-| `WithinSubjectSplitter` | ✓ | ✗ | 세션 내 성능 |
+| `WithinSubjectSplitter` | ✓ | **✓** | 세션 내 성능 |
 | **`CrossSessionSplitter`** (신규) | ✓ | ✗ | 세션 간 비교 (CLAUDE.md §3.8 종단 프로필) |
 | `WindowRandomSplitter` | ✗ | ✗ | 누수 시연 전용 |
+
+**세션 중첩 검사는 `(피험자, 세션번호)` 복합 키로 한다.** `session_idx`만 보면
+피험자 A의 세션 0과 피험자 B의 세션 0이 같은 세션으로 취급되어 LOSO가 자기 자신의
+가드에 걸린다. `session_idx`를 int로 싣는 이유는 `CrossSessionSplitter`가 피험자를
+가로질러 같은 번호의 세션을 묶어야 하기 때문이며, 복합은 가드가 수행한다.
 
 `allows_same_subject`와 마찬가지로 **속성을 생략하면 `False`로 간주**한다. 새
 분할기를 쓰는 사람이 아무것도 선언하지 않으면 가장 엄격한 쪽으로 떨어진다.
 
-`WithinSubjectSplitter`가 `allows_same_session=False`인 것에 주의. 지금까지는
-세션이 하나뿐이라 자동으로 만족했지만, 세션이 여럿이 되면 이 분할기는 **세션
-안에서만** 시행을 나눠야 한다. 그렇지 않으면 세션 간 성능을 세션 내 성능으로
-잘못 보고하게 된다(CLAUDE.md §5.4 위반).
+`WithinSubjectSplitter`는 **세션 안에서만** 시행을 나눈다 — 그래서 같은 세션이
+train과 test 양쪽에 나타나며 `allows_same_session=True`다. 세션을 가로질러 나누면
+세션 간 성능을 세션 내 성능으로 잘못 보고하게 된다(CLAUDE.md §5.4 위반). 그룹 키가
+`(피험자)`에서 `(피험자, 세션)`으로 바뀐다.
 
 ### 7.4 `cv_scheme` 분리
 
@@ -394,16 +406,33 @@ T1은 그냥 두면 **거의 자동으로 통과한다** — 드리프트는 세
 ### 8.2 T4의 측정 방법 — 기울기 보존율
 
 "심은 값 부근"은 절대 수치를 요구하므로 쓰지 않는다. 대신 **같은 회귀를 두 번
-돌려 비율을 본다.**
+돌려 비율을 본다.** 무엇을 회귀하는지가 중요하므로 명시한다.
 
-1. 동일 n-back 수준 내에서, ground truth `effective_load`를 `session_idx`에
-   회귀 → 기울기 `b_true`
-2. 같은 층화로, 모델이 추정한 부하를 `session_idx`에 회귀 → 기울기 `b_hat`
-3. **보존율 = `b_hat / b_true`**
+**분류기 출력은 쓰지 않는다.** 두 가지 이유로 틀린 측정이 된다.
+(a) 분류기 출력은 클래스 인덱스 단위이고 ground truth는 부하 비율 단위라 비율의
+분모·분자가 서로 다른 척도다. (b) 더 나쁘게는, **잘 작동하는 분류기일수록 약해진
+신호를 여전히 올바른 클래스로 되돌리므로 추정 부하가 감소하지 않는다** — 정규화가
+정상인데도 T4가 실패한다.
 
-`b_true`는 생성기가 심은 값이므로 알고 있다. 보존율이 1 근처면 연습 효과가 온전히
-살아남은 것이고, 0 근처면 정규화가 지운 것이다. 절대 단위를 몰라도 판정할 수 있고,
-`practice_rate`를 바꿔도 기준이 그대로 유지된다.
+**대신 정규화된 특징을 직접 회귀한다.**
+
+고정된 n-back 수준 L에 대해, `m(s)` = 세션 `s`의 수준 L 창들에서 구한 **정규화된
+fNIRS HbO 평균 특징**의 평균(피험자 전체 풀링). `m(s) = a + b·s`를 적합한다.
+
+| 기울기 | 어느 실행에서 |
+|---|---|
+| `b_hat` | 드리프트 **on** + 정규화 **on** — 실제 파이프라인 |
+| `b_ref` | 드리프트 **off** + 정규화 **off** — 연습 효과만 남은 깨끗한 신호 |
+
+**보존율 = `b_hat / b_ref`**
+
+두 값이 **같은 특징·같은 단위**이므로 비율이 의미를 갖는다. `b_ref`는 우리가 심은
+연습 효과가 특징에 실제로 나타나는 크기이며, 드리프트가 없으므로 정규화도 필요
+없다. 보존율이 1 근처면 연습 효과가 온전히 살아남은 것이고, 0 근처면 정규화가
+지운 것이다.
+
+두 실행은 **같은 시드**를 쓰므로 §5.5의 난수열 규율이 여기서 값을 한다 — 드리프트를
+꺼도 다른 난수열로 넘어가지 않아야 `b_ref`가 `b_hat`의 정당한 기준이 된다.
 
 보존율의 **하한**은 파일럿 보정 대상이다(§8.4). 상한도 둔다 — 보존율이 1을 크게
 넘으면 정규화가 없던 변화를 만들어낸 것이므로 그것도 실패다.
