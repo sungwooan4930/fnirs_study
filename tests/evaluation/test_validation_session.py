@@ -338,3 +338,135 @@ def test_t3_injection_foreign_baseline_fails_to_recover(tmp_path, monkeypatch):
         f"ceiling_nodrift={ceiling_nodrift['pooled_accuracy']:.4f}) — "
         "정규화가 세션 고유 정보를 쓰고 있지 않다는 뜻이다."
     )
+
+
+# ---------------------------------------------------------------- T4
+
+from collections import defaultdict
+
+from src.datasets.windowing import make_windows
+from src.preprocessing.baseline import SessionBaseline
+from src.simulation.state import BASELINE, TASK
+
+CLEAN = "config/experiments/session_clean.yaml"
+
+#: 회귀 대상 부하 수준. nback_levels [0,2,3] 의 인덱스 2 = 3-back.
+#: 가장 부하가 높은 조건이라 연습 효과가 가장 크게 나타난다.
+T4_LEVEL = 2
+
+#: 기울기 보존율의 허용 범위. 관측에서 역산한 값이 아니라 의미에서 나온 선언이다.
+#: 하한: 연습 효과의 절반 미만만 남았다면 정규화가 진짜 인지 변화를 지운 것이다.
+#: 상한: 1.5를 넘으면 정규화가 없던 변화를 만들어낸 것이다 (스펙 §8.2).
+T4_RATIO_MIN = 0.5
+T4_RATIO_MAX = 1.5
+
+
+def _practice_slope(config_path, *, normalize, normalizer=SessionBaseline):
+    """세션 번호에 대한 fNIRS HbO 평균 특징의 기울기.
+
+    스펙 §8.2가 정의한 m(s)를 계산하고 1차 다항식을 적합한다.
+
+    **normalize 인자는 "정규화 파이프라인을 태우는지" 여부이며, "드리프트가
+    있는지"와 독립이다.** 호출자가 config로 드리프트 유무를 고르고, 이 인자로
+    정규화 유무를 고른다 — 둘을 합쳐 어떤 조합을 쓸지는 호출부(T4 테스트)가
+    결정한다. §6.2 정정 이후 이 선택이 값의 **단위**를 바꾸므로(아래 테스트
+    docstring 참조) 더는 사소한 스위치가 아니다.
+    """
+    cfg = load_config(config_path)
+    validate_config(cfg)
+    rng = set_all_seeds(int(cfg["seed"]))
+    n_ch = int(cfg["simulation"]["fnirs"]["n_channels"])
+    win = cfg["windowing"]
+
+    per_session = defaultdict(list)
+    for rec in generate_dataset(cfg["simulation"], rng):
+        windows = make_windows(rec.timeline, win["window_s"], win["step_s"])
+        feats = extract_features(rec, windows)["fnirs"]
+
+        if normalize:
+            is_base = windows.block_kind == BASELINE
+            start = is_base & (windows.trial_id == windows.trial_id.min())
+            feats = normalizer.fit(feats[start], "concentration_delta").apply(feats)
+
+        sel = (windows.block_kind == TASK) & (windows.load_level == T4_LEVEL)
+        assert sel.any(), "3-back 창이 없으면 회귀할 대상이 없다"
+        # fnirs 특징 배치: [HbO 평균 n_ch개 | HbO 기울기 n_ch개]
+        per_session[rec.session_idx].append(float(feats[sel][:, :n_ch].mean()))
+
+    xs = np.array(sorted(per_session), dtype=float)
+    ys = np.array([np.mean(per_session[int(s)]) for s in xs])
+    return float(np.polyfit(xs, ys, 1)[0])
+
+
+@pytest.mark.slow
+def test_t4_practice_effect_survives_normalization(tmp_path):
+    """정규화가 측정 드리프트를 지우면서 진짜 학습은 남겨야 한다.
+
+    **브리프 원안과 다르게 `b_ref`도 정규화 on으로 계산한다.** Task 14 중
+    §6.2가 바뀌어 `concentration_delta`가 베이스라인 산포로도 나누게
+    됐다 — 결과 단위가 "원 농도 단위"에서 "베이스라인 산포 대비 배수"
+    (무차원)로 바뀌었다. `normalize=False`(원 단위)와 `normalize=True`
+    (배수 단위)는 더 이상 같은 자로 잰 값이 아니다: 실측으로 확인한 결과
+    `_practice_slope(CLEAN, normalize=False)` = 약 -0.0358 (원 단위)인 반면
+    `_practice_slope(RECOVERY, normalize=True)` = 약 -2.5812 (배수 단위)라
+    단순 비율이 약 72로 튄다 — 세션의 베이스라인 산포(σ≈0.014)가 작아서
+    나눗셈이 값을 그만큼 확대했을 뿐, 연습 효과가 커진 게 아니다.
+
+    그래서 `b_ref`도 같은 정규화 파이프라인을 통과시키고 **드리프트만
+    끈다** — T3가 `within_subject`(다른 분할기)에서 `ceiling_nodrift`
+    (같은 분할기, 드리프트만 0)로 상한을 바꾼 것과 같은 원칙이다(스펙
+    §8.2 "2026-08-19 참고" 문단이 이미 이 원칙—"같은 파이프라인, 드리프트만
+    다르다"—을 예고했다). 이러면 `b_ref`·`b_hat` 둘 다 "베이스라인 산포
+    대비 배수" 단위로 맞춰져 비율이 다시 의미를 가진다.
+    """
+    b_ref = _practice_slope(CLEAN, normalize=True)
+    b_hat = _practice_slope(RECOVERY, normalize=True)
+
+    assert abs(b_ref) > 1e-9, (
+        "기준 실행에서 연습 효과 기울기가 0이다 — practice.rate가 특징에 "
+        "도달하지 않았다는 뜻이므로 보존율을 정의할 수 없다"
+    )
+    ratio = b_hat / b_ref
+    assert T4_RATIO_MIN <= ratio <= T4_RATIO_MAX, (
+        f"기울기 보존율 {ratio:.3f} 가 [{T4_RATIO_MIN}, {T4_RATIO_MAX}] 밖이다. "
+        f"b_ref={b_ref:.4f} b_hat={b_hat:.4f}. 낮으면 정규화가 진짜 인지 변화까지 "
+        "지웠다는 뜻이고, 높으면 없던 변화를 만들어냈다는 뜻이다 — 둘 다 실패다."
+    )
+
+
+@pytest.mark.slow
+def test_t4_injection_over_normalization_kills_the_practice_effect():
+    """결함 주입: 분모를 베이스라인 블록이 아니라 세션 전체(과제 포함)의 산포로 바꾼다.
+
+    **브리프 원안(세션별 전체 z-score)을 재설계 없이 그대로 썼다** — 검토해보니
+    이미 요점을 구현하고 있었다. `_practice_slope`는 `normalizer.fit(feats[start],
+    ...)`로 베이스라인 창만 넘겨 fit하지만, 그 뒤 `.apply(feats)`는 **세션 전체
+    (베이스라인+과제) 특징 행렬**을 넘긴다. 아래 `_ZScoreBaseline.apply`는 인자로
+    받은 `arr`(=세션 전체)의 표준편차로 나누므로, 분모가 처음부터 "세션 전체
+    산포"이지 "베이스라인 블록 산포"가 아니다 — 요청된 결함 그대로다. 바뀐 것은
+    비교 기준(`b_ref`)뿐이다: 위 테스트와 같은 이유로 `normalize=True`(드리프트
+    off, 정규화 on)를 쓴다 — `normalize=False`를 분모로 쓰면 다시 단위가
+    어긋나 결함 주입 없이도 보존율이 낮아 보이는 거짓 양성이 나온다.
+
+    평균만이 아니라 분산까지 세션마다 맞추면, 과제 반응 크기(=연습 효과가
+    만드는 신호 변화) 자체가 분모에 흡수돼 세션 간 크기 차이가 통째로
+    사라진다. 측정 드리프트와 함께 진짜 학습도 지워진다.
+    """
+
+    class _ZScoreBaseline(SessionBaseline):
+        @classmethod
+        def fit(cls, start_baseline, kind):
+            return _ZScoreBaseline(reference=np.asarray(start_baseline).mean(axis=0), kind=kind)
+
+        def apply(self, x):
+            arr = np.asarray(x, dtype=float)
+            sd = arr.std(axis=0)
+            sd[sd == 0] = 1.0
+            return (arr - arr.mean(axis=0)) / sd
+
+    b_ref = _practice_slope(CLEAN, normalize=True)
+    b_bad = _practice_slope(RECOVERY, normalize=True, normalizer=_ZScoreBaseline)
+    assert abs(b_bad / b_ref) < T4_RATIO_MIN, (
+        f"과한 정규화를 주입했는데도 보존율({b_bad / b_ref:.4f})이 유지됐다 — "
+        f"b_ref={b_ref:.4f} b_bad={b_bad:.4f}. T4가 이 실패 양식을 못 잡는다"
+    )
