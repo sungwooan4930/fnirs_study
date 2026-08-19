@@ -1,7 +1,7 @@
 {
-  "pooled_accuracy": 0.6541666666666667,
-  "accuracy_mean": 0.6541666666666667,
-  "accuracy_worst": 0.296,
+  "pooled_accuracy": 0.6283333333333333,
+  "accuracy_mean": 0.6283333333333333,
+  "accuracy_worst": 0.31466666666666665,
   "chance_level": 0.3333333333333333,
   "cv_method": "loso"
 }

@@ -9,6 +9,15 @@ from src.evaluation.runner import run_experiment
 
 PILOT = "config/experiments/pilot.yaml"
 
+# [2026-08-19 실측치 — 세션 통합(Task 13) 이전] 아래 7.55%p·0.6542·0.7297은
+# 단일 세션 시절 측정값이다. Task 13에서 pilot.yaml이 n_sessions=3으로
+# 바뀌고 세션 베이스라인 정규화가 실제로 켜졌으므로 절대 수치는 더 이상
+# 정확하지 않다 — LOSO 기준값 자체가 tests/baselines/t2_pilot.json에서
+# 0.6542 → 0.6283으로 갱신됐다. 재측정하지 않은 이유: INFLATION_THRESHOLD
+# (0.05)가 지키려는 성질(누수가 있으면 LOSO보다 유의하게 높다)은 재확인됐고
+# (test_t3b는 여전히 통과한다), 아래 서술은 문턱을 고른 *논리*를 설명하는
+# 것이지 재현해야 하는 값이 아니다. 문턱 자체를 다시 조정할 근거가 생기면
+# 그때 재측정해 이 블록 전체를 갱신할 것.
 # 파일럿 실측(2026-08-19)에 근거해 5%p로 보정됨 — 원래 스펙의 15%p는
 # 데이터 없이 사전에 정한 값이었다. 실제로 측정된 부풀림은 7.55%p
 # (LOSO 0.6542 → window_random 누수 0.7297)이다.
@@ -74,7 +83,11 @@ def test_t3b_leakage_actually_inflates_accuracy(tmp_path):
             tmp_path, "leaky",
             evaluation={
                 "splitter": "window_random",
-                "guards": {"check_subject_overlap": False, "check_window_overlap": False},
+                "guards": {
+                    "check_subject_overlap": False,
+                    "check_window_overlap": False,
+                    "check_session_overlap": False,
+                },
             },
         )
     )
@@ -98,7 +111,11 @@ def test_t3_unsafe_run_is_marked_in_directory_name(tmp_path):
         tmp_path, "marked",
         evaluation={
             "splitter": "window_random",
-            "guards": {"check_subject_overlap": False, "check_window_overlap": False},
+            "guards": {
+                "check_subject_overlap": False,
+                "check_window_overlap": False,
+                "check_session_overlap": False,
+            },
         },
     )
     assert out.name.endswith("-UNSAFE")
@@ -125,7 +142,7 @@ def test_t3_testview_fit_is_blocked_regardless_of_guard_config(tmp_path):
     cfg["simulation"]["task"]["block_duration_s"] = 20
     cfg["simulation"]["eeg"]["sfreq_hz"] = 100
 
-    dataset, _ = build_dataset(cfg, set_all_seeds(0))
+    dataset, _, _ = build_dataset(cfg, set_all_seeds(0))
     fold = next(iter(dataset.iter_folds(get_splitter("loso"))))
 
     with pytest.raises(LeakageError):

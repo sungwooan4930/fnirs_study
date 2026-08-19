@@ -20,11 +20,21 @@ def _metrics(config, tmp_path, **overrides):
 def test_t1_null_effect_stays_at_chance(tmp_path):
     m = _metrics("config/experiments/null.yaml", tmp_path)
     assert m["cv_method"] == "loso"
-    assert m["pooled_ci_low"] <= CHANCE <= m["pooled_ci_high"], (
-        f"널 데이터인데 chance가 신뢰구간 밖이다 "
-        f"({m['pooled_ci_low']:.3f}, {m['pooled_ci_high']:.3f}) — 파이프라인에 누수가 있다"
+    # 널 판정은 subject_ci(fold 수준 t-구간)로 한다. pooled_ci는 5초창·1초
+    # 스텝의 80% 오버랩 때문에 창을 독립 시행으로 취급해 불확실성을
+    # 과소평가한다 — 세션이 늘어 창 수가 커질수록 더 위험해진다
+    # (metrics.aggregate 문서 참조). 실패 메시지에 두 구간을 모두 적어
+    # 다음 사람이 그 차이를 보게 한다.
+    assert m["subject_ci_low"] <= CHANCE <= m["subject_ci_high"], (
+        f"널 데이터인데 chance가 fold 수준 신뢰구간 밖이다 "
+        f"(subject_ci=[{m['subject_ci_low']:.3f}, {m['subject_ci_high']:.3f}], "
+        f"pooled_ci=[{m['pooled_ci_low']:.3f}, {m['pooled_ci_high']:.3f}]) — "
+        "파이프라인에 누수가 있다"
     )
-    assert m["binomtest_p"] > 0.05
+    # binomtest_p는 삭제했다: pooled_ci와 같은 독립성 결함을 공유한다
+    # (18000개 오버랩 창을 독립 베르누이 시행으로 세어 계산된 p값). 세션
+    # 수·창 수가 늘수록 거짓 양성(널인데도 유의하다고 나옴)을 낸다. 널
+    # 판정은 위 subject_ci 하나로 충분하다.
 
 
 @pytest.mark.slow
@@ -38,7 +48,12 @@ def test_t1_null_holds_at_pilot_scale_too(tmp_path):
         "config/experiments/pilot.yaml", tmp_path,
         simulation={"effect_size": 0.0},
     )
-    assert m["pooled_ci_low"] <= CHANCE <= m["pooled_ci_high"]
+    # subject_ci를 쓰는 이유는 위 test_t1_null_effect_stays_at_chance와 같다.
+    assert m["subject_ci_low"] <= CHANCE <= m["subject_ci_high"], (
+        f"널 데이터인데 chance가 fold 수준 신뢰구간 밖이다 "
+        f"(subject_ci=[{m['subject_ci_low']:.3f}, {m['subject_ci_high']:.3f}], "
+        f"pooled_ci=[{m['pooled_ci_low']:.3f}, {m['pooled_ci_high']:.3f}])"
+    )
 
 
 @pytest.mark.slow

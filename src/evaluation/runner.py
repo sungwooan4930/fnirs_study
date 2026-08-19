@@ -27,7 +27,15 @@ from src.datasets.windowing import make_windows
 from src.evaluation.harness import run_folds
 from src.evaluation.metrics import aggregate
 from src.evaluation.splitters import get_splitter
+from src.preprocessing.baseline import (
+    MODALITY_KIND,
+    SessionBaseline,
+    SessionQuality,
+    compute_drift,
+    flag_drift,
+)
 from src.simulation.recording import generate_dataset
+from src.simulation.state import BASELINE
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -86,11 +94,24 @@ def _config_hash(cfg: dict) -> str:
     return "cfg" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:8]
 
 
-def build_dataset(cfg: dict, rng: np.random.Generator) -> tuple[WindowedDataset, int]:
-    """합성 녹화를 만들고 창·특징·라벨을 거쳐 계약 객체를 조립한다."""
+def build_dataset(
+    cfg: dict, rng: np.random.Generator
+) -> tuple[WindowedDataset, int, list[SessionQuality]]:
+    """합성 녹화를 만들고 창·특징·정규화·라벨을 거쳐 계약 객체를 조립한다.
+
+    정규화는 **녹화(= 한 피험자의 한 세션) 단위로 독립 수행**한다. 기준은
+    그 세션의 시작 베이스라인이고, 종료 베이스라인은 드리프트 추정에만
+    쓴다 (CLAUDE.md §3.8).
+    """
     win_cfg = cfg["windowing"]
     ds_cfg = cfg["dataset"]
+    base_cfg = cfg["preprocessing"]["baseline"]
     lead_delta_s = float(cfg["simulation"]["lead_delta_s"])
+
+    normalize = bool(base_cfg["normalize"])
+    zero_atol = float(base_cfg["zero_atol"])
+    drift_threshold = float(base_cfg["drift_threshold_relative"])
+    include_baseline = bool(ds_cfg["include_baseline"])
 
     extract_features = get_extractor(cfg["features"]["extractor"])
     lead_targets = list(ds_cfg["lead_targets"])
@@ -99,17 +120,59 @@ def build_dataset(cfg: dict, rng: np.random.Generator) -> tuple[WindowedDataset,
 
     feature_blocks: dict[str, list[np.ndarray]] = {}
     label_blocks: dict[str, list[np.ndarray]] = {}
-    subjects, times, trials = [], [], []
+    subjects, sessions, times, trials, norm_src = [], [], [], [], []
+    qualities: list[SessionQuality] = []
     n_dropped = 0
+    trial_offset = 0
 
     for rec in recordings:
         windows = make_windows(rec.timeline, win_cfg["window_s"], win_cfg["step_s"])
         feats = extract_features(rec, windows)
+
+        is_base = windows.block_kind == BASELINE
+        start_mask = is_base & (windows.trial_id == windows.trial_id.min())
+        end_mask = is_base & (windows.trial_id == windows.trial_id.max())
+        if not start_mask.any() or not end_mask.any():
+            raise ValueError(
+                f"{rec.subject_id} ses-{rec.session_idx}: 시작 또는 종료 "
+                "베이스라인에서 창이 나오지 않았다. CLAUDE.md §2.4는 두 "
+                "베이스라인을 생략 불가로 규정한다"
+            )
+
+        # 드리프트는 **정규화 전 원 단위**에서 잰다. dB 변환 후에는 기준값이
+        # 정의상 0이 되어 상대 비율이 성립하지 않는다.
+        drift_by_modality: dict[str, float] = {}
+        n_excluded_by_modality: dict[str, int] = {}
+        for name, arr in feats.items():
+            if MODALITY_KIND[name] == "absolute":
+                continue  # 행동은 장비 재부착의 영향을 받지 않으므로 드리프트 대상이 아니다
+            drift = compute_drift(arr[start_mask], arr[end_mask], zero_atol=zero_atol)
+            drift_by_modality[name] = drift.aggregate
+            n_excluded_by_modality[name] = drift.n_excluded
+
+        qualities.append(
+            SessionQuality(
+                subject_id=rec.subject_id,
+                session_idx=rec.session_idx,
+                drift_by_modality=drift_by_modality,
+                n_excluded_by_modality=n_excluded_by_modality,
+                drift_flag=flag_drift(drift_by_modality, drift_threshold),
+            )
+        )
+
+        if normalize:
+            for name in list(feats):
+                baseline = SessionBaseline.fit(
+                    feats[name][start_mask], MODALITY_KIND[name]
+                )
+                feats[name] = baseline.apply(feats[name])
+
         labels, keep = build_labels(
             rec, windows,
             lead_delta_s=lead_delta_s,
             rt_bins=list(ds_cfg["rt_bins"]),
             lead_targets=lead_targets,
+            include_baseline=include_baseline,
         )
         n_dropped += int((~keep).sum())
 
@@ -118,18 +181,30 @@ def build_dataset(cfg: dict, rng: np.random.Generator) -> tuple[WindowedDataset,
         for name, arr in labels.items():
             label_blocks.setdefault(name, []).append(arr[keep])
 
-        subjects.append(np.full(int(keep.sum()), rec.subject_id))
+        n_kept = int(keep.sum())
+        subjects.append(np.full(n_kept, rec.subject_id))
+        sessions.append(np.full(n_kept, rec.session_idx))
         times.append(np.column_stack([windows.start_s, windows.end_s])[keep])
-        trials.append(windows.trial_id[keep])
+        # trial_id는 세션마다 0부터 세므로 전역 오프셋을 더한다. 계약이
+        # 고유성을 검증하지만, 만드는 책임은 여기에 있다.
+        trials.append(windows.trial_id[keep] + trial_offset)
+        # 정규화에 실제로 쓰인 창만 표식한다. normalize가 꺼져 있으면
+        # 아무것도 fit되지 않았으므로 표식도 없다.
+        norm_src.append(
+            start_mask[keep] if normalize else np.zeros(n_kept, dtype=bool)
+        )
+        trial_offset += int(windows.trial_id.max()) + 1
 
     dataset = WindowedDataset(
         X={k: np.vstack(v) for k, v in feature_blocks.items()},
         y={k: np.concatenate(v) for k, v in label_blocks.items()},
         subject_ids=np.concatenate(subjects),
+        session_ids=np.concatenate(sessions),
         window_times=np.vstack(times),
         trial_ids=np.concatenate(trials),
+        normalization_source=np.concatenate(norm_src),
     )
-    return dataset, n_dropped
+    return dataset, n_dropped, qualities
 
 
 def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
@@ -149,6 +224,15 @@ def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
             "evaluation is not supported yet — 러너는 targets[0] 하나만 평가하고 "
             "나머지를 조용히 버린다. 여러 타깃을 평가하려면 config를 나눠 "
             "각각 실행하라"
+        )
+
+    if bool(cfg["dataset"]["include_baseline"]) and "cognitive_load" in targets:
+        raise ValueError(
+            "dataset.include_baseline=true 인데 target이 'cognitive_load'다. "
+            "베이스라인 창은 과제 조건이 없어 센티넬 라벨(-1)을 갖는다 — 부하 "
+            "분류에 넣으면 클래스가 하나 늘고 chance level이 33.3%에서 25%로 "
+            "조용히 바뀐다. CLAUDE.md §9.2 4번('3수준 분류'의 정의)이 미확정이므로 "
+            "코드가 임의로 확정하지 않는다."
         )
 
     seed = int(cfg["seed"])
@@ -175,7 +259,7 @@ def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
     out_dir = Path(cfg["output"]["results_dir"]) / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    dataset, n_dropped = build_dataset(cfg, rng)
+    dataset, n_dropped, qualities = build_dataset(cfg, rng)
 
     target = targets[0]
 
@@ -210,6 +294,8 @@ def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
     metrics["n_windows_dropped"] = n_dropped
     metrics["guards_disabled"] = guards_disabled
     metrics["target"] = target
+    metrics["n_sessions_flagged"] = sum(1 for q in qualities if q.drift_flag)
+    metrics["n_sessions"] = len(qualities)
 
     (out_dir / "config.yaml").write_text(
         yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8"
@@ -243,14 +329,31 @@ def run_experiment(config_path, *, overrides: dict | None = None) -> Path:
                 [r.fold_id, ";".join(r.test_subjects), r.n_train, r.n_test, f"{r.accuracy:.6f}"]
             )
 
+    with (out_dir / "session_quality.csv").open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        modalities = sorted(qualities[0].drift_by_modality) if qualities else []
+        writer.writerow(
+            ["subject_id", "session_idx", "drift_flag"]
+            + [f"drift_{m}" for m in modalities]
+            + [f"n_excluded_{m}" for m in modalities]
+        )
+        for q in qualities:
+            writer.writerow(
+                [q.subject_id, q.session_idx, q.drift_flag]
+                + [f"{q.drift_by_modality[m]:.6f}" for m in modalities]
+                + [q.n_excluded_by_modality[m] for m in modalities]
+            )
+
     (out_dir / "log.txt").write_text(
         f"run_id={run_id}\n"
         f"cv_method={metrics['cv_method']}\n"
         f"chance_level={metrics['chance_level']:.4f}\n"
         f"accuracy_mean={metrics['accuracy_mean']:.4f}\n"
         f"accuracy_worst={metrics['accuracy_worst']:.4f}\n"
+        f"subject_ci=[{metrics['subject_ci_low']:.4f}, {metrics['subject_ci_high']:.4f}]\n"
         f"n_windows_dropped={n_dropped}\n"
-        f"guards_disabled={guards_disabled}\n",
+        f"guards_disabled={guards_disabled}\n"
+        f"n_sessions_flagged={metrics['n_sessions_flagged']}/{metrics['n_sessions']}\n",
         encoding="utf-8",
     )
 

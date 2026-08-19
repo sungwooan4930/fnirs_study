@@ -7,7 +7,7 @@ import yaml
 from src.common.seeding import set_all_seeds
 from src.datasets.labels import build_labels
 from src.datasets.windowing import make_windows
-from src.common.config import ConfigError
+from src.common.config import ConfigError, load_config
 from src.evaluation.runner import build_dataset, run_experiment
 from src.simulation.recording import generate_dataset
 import src.evaluation.runner as runner_module
@@ -83,7 +83,7 @@ def _cfg_file(tmp_path, results_dir, **sim_overrides):
 
 
 def test_build_dataset_shapes_are_consistent():
-    ds, dropped = build_dataset(BASE_CFG, set_all_seeds(0))
+    ds, dropped, _ = build_dataset(BASE_CFG, set_all_seeds(0))
     assert ds.n_windows > 0
     assert dropped >= 0
     assert sorted(ds.modalities) == ["behavior", "eeg", "fnirs"]
@@ -91,7 +91,7 @@ def test_build_dataset_shapes_are_consistent():
 
 
 def test_build_dataset_has_all_three_targets():
-    ds, _ = build_dataset(BASE_CFG, set_all_seeds(0))
+    ds, _, _ = build_dataset(BASE_CFG, set_all_seeds(0))
     assert ds.targets == ["accuracy", "cognitive_load", "response_latency"]
 
 
@@ -105,7 +105,7 @@ def test_lead_targets_selects_which_lead_labels_are_built():
 
     cfg = copy.deepcopy(BASE_CFG)
     cfg["dataset"]["lead_targets"] = ["accuracy"]
-    ds, _ = build_dataset(cfg, set_all_seeds(0))
+    ds, _, _ = build_dataset(cfg, set_all_seeds(0))
     assert ds.targets == ["accuracy", "cognitive_load"]
 
 
@@ -275,18 +275,23 @@ def test_git_unavailable_records_unknown_not_clean(tmp_path, monkeypatch):
 
 
 def test_build_dataset_preserves_row_alignment():
-    """subject_id·trial_id·특징 행이 keep 마스크를 거친 뒤에도 정렬되어 있는지 확인한다.
+    """subject_id·session_id·trial_id·특징 행이 keep 마스크를 거친 뒤에도 정렬되어 있는지 확인한다.
 
     features/labels에는 정확한 keep을 적용하고 subject_ids에는 어긋난
     keep을 적용하는 버그가 있어도 전체 길이는 똑같이 유지될 수 있다
     (WindowedDataset의 길이 검사는 이런 종류의 어긋남을 잡지 못한다).
-    같은 시드로 녹화를 독립적으로 다시 만들어 각 피험자의 trial_id
+    같은 시드로 녹화를 독립적으로 다시 만들어 각 (피험자, 세션)의 trial_id
     시퀀스를 직접 재계산하고, build_dataset이 내놓은 결과에서 같은
-    피험자로 필터링한 행과 원소 단위로 비교한다. 정렬이 한 칸이라도
+    (피험자, 세션)으로 필터링한 행과 원소 단위로 비교한다. 정렬이 한 칸이라도
     어긋나면 길이나 값이 달라져 실패한다.
+
+    trial_id는 녹화(= 한 피험자의 한 세션)마다 0부터 세지만 계약은 전역
+    고유성을 요구하므로, build_dataset은 녹화 순서대로 누적 오프셋을
+    더한다 (Task 13). 이 테스트는 generate_dataset이 내놓는 순서가
+    build_dataset과 동일하다는 전제로 같은 오프셋을 독립적으로 재계산한다.
     """
     seed = 123
-    ds, _ = build_dataset(BASE_CFG, set_all_seeds(seed))
+    ds, _, _ = build_dataset(BASE_CFG, set_all_seeds(seed))
 
     # build_dataset과 동일한 시드로 녹화열을 독립적으로 재현
     recordings = generate_dataset(BASE_CFG["simulation"], set_all_seeds(seed))
@@ -296,20 +301,25 @@ def test_build_dataset_preserves_row_alignment():
     rt_bins = list(BASE_CFG["dataset"]["rt_bins"])
 
     ds_subjects = ds.get_subject_ids()
+    ds_sessions = ds.get_session_ids()
     ds_trials = ds.get_trial_ids()
 
     assert len(recordings) > 0
+    trial_offset = 0
     for rec in recordings:
         windows = make_windows(rec.timeline, win_cfg["window_s"], win_cfg["step_s"])
         _, keep = build_labels(
             rec, windows, lead_delta_s=lead_delta_s, rt_bins=rt_bins
         )
-        expected_trials = windows.trial_id[keep]
+        expected_trials = windows.trial_id[keep] + trial_offset
 
-        actual_trials = ds_trials[ds_subjects == rec.subject_id]
+        mask = (ds_subjects == rec.subject_id) & (ds_sessions == rec.session_idx)
+        actual_trials = ds_trials[mask]
         assert np.array_equal(actual_trials, expected_trials), (
-            f"row misalignment detected for subject {rec.subject_id}"
+            f"row misalignment detected for subject {rec.subject_id} "
+            f"ses-{rec.session_idx}"
         )
+        trial_offset += int(windows.trial_id.max()) + 1
 
 
 def test_typo_in_overrides_is_rejected_not_silently_absorbed():
@@ -323,3 +333,53 @@ def test_typo_in_overrides_is_rejected_not_silently_absorbed():
             "config/experiments/smoke.yaml",
             overrides={"simulation": {"n_sesions": 3}},
         )
+
+
+def test_build_dataset_returns_session_quality_per_recording():
+    cfg = load_config("config/experiments/smoke.yaml")
+    rng = set_all_seeds(cfg["seed"])
+    ds, _, qualities = build_dataset(cfg, rng)
+    expected = cfg["simulation"]["n_subjects"] * cfg["simulation"]["n_sessions"]
+    assert len(qualities) == expected
+    assert {q.session_idx for q in qualities} == set(range(cfg["simulation"]["n_sessions"]))
+
+
+def test_dataset_carries_session_ids_and_globally_unique_trials():
+    cfg = load_config("config/experiments/smoke.yaml")
+    rng = set_all_seeds(cfg["seed"])
+    ds, _, _ = build_dataset(cfg, rng)
+    assert set(ds.get_session_ids().tolist()) == set(range(cfg["simulation"]["n_sessions"]))
+    # 계약이 이미 검증하지만, 조립하는 쪽이 오프셋을 실제로 더했는지 확인한다
+    pairs = {
+        (s, int(k)) for s, k in zip(ds.get_subject_ids(), ds.get_session_ids())
+    }
+    assert len(pairs) == cfg["simulation"]["n_subjects"] * cfg["simulation"]["n_sessions"]
+
+
+def test_include_baseline_with_load_target_is_refused_with_a_clear_message():
+    with pytest.raises(ValueError, match="include_baseline"):
+        run_experiment(
+            "config/experiments/smoke.yaml",
+            overrides={"dataset": {"include_baseline": True}},
+        )
+
+
+def test_run_experiment_writes_session_quality_csv(tmp_path):
+    out = run_experiment(
+        "config/experiments/smoke.yaml",
+        overrides={"output": {"results_dir": str(tmp_path)}},
+    )
+    text = (out / "session_quality.csv").read_text(encoding="utf-8")
+    assert "subject_id,session_idx,drift_flag" in text.splitlines()[0]
+
+
+def test_cross_session_run_records_its_scheme(tmp_path):
+    out = run_experiment(
+        "config/experiments/smoke.yaml",
+        overrides={
+            "evaluation": {"splitter": "cross_session"},
+            "output": {"results_dir": str(tmp_path)},
+        },
+    )
+    metrics = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["cv_method"] == "cross_session"
