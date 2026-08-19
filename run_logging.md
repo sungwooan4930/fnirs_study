@@ -1226,3 +1226,140 @@ fnirs가 그 잡음을 그대로 받는다. `baseline_duration_s`를 60(창 ~56�
 
 상세: `docs/specs/2026-08-19-session-baseline-design.md` §8.4.1 "정정 8",
 `.superpowers/sdd/2026-08-19-session-baseline/task-16-report.md`.
+
+### 2026-08-19 — Task 17: B1 결과 통합 기록 · 한계 명시 (서브프로젝트 B1 종료)
+
+Task 1~16의 실행 결과가 이 파일과 스펙 §8.4.1에 흩어져 있었다. 이 항목은 그것을
+승인기준 T1~T6 단위로 통합하고, 실행 중 되돌린 판정과 새로 드러난 한계를
+정리한다. **새 실험을 돌리지 않았다 — 전부 Task 14~16이 이미 낸 값의 재정리다.**
+원본: `.superpowers/sdd/2026-08-19-session-baseline/task-{14,15,16}-report.md`,
+`docs/specs/2026-08-19-session-baseline-design.md` §8.4.1.
+
+### 완료 — T1~T6 최종 결과 (CV 방식 · chance level을 항상 함께 표기)
+
+공통: **chance level = 0.3333**(3수준). 아래 CV 방식을 **혼용 표기하지 않는다** —
+T1~T6은 전부 `cross_session`(leave-one-session-out) 아니면 그 대조로 쓴
+`within_subject`/`ceiling_nodrift`이며, **LOSO가 아니다**. 유일한 LOSO 수치는
+표 맨 끝의 "참고" 행(파일럿 스냅샷)이다.
+
+| 승인기준 | CV 방식 | 실측 | 임계 | 판정 | 결함 주입 |
+|---|---|---|---|---|---|
+| T1 널 (정규화 off) | cross_session | fold_ci가 chance(0.3333) 포함 | fold_ci_low ≤ chance ≤ fold_ci_high | PASS | 주입1(부하 조건부 정규화, 전역 평균으로 강화) accuracy_mean=0.475·fold_ci_low=0.453 → 빨간불. 주입2(부하 의존 드리프트, 덧셈 오프셋 0.05·load) fold_ci_low=0.639 → 빨간불 |
+| T1 널 (정규화 on) | cross_session | fold_ci가 chance 포함 | 동일 | PASS | 위와 동일 메커니즘, 정규화 on에서도 재확인 |
+| T2 붕괴 (정규화 off) | cross_session | pooled=0.4126, fold_ci=[0.1500, 0.6751] | fold_ci_low ≤ chance ≤ fold_ci_high | PASS | 드리프트 전부 0 → fold_ci_low > chance, 붕괴 사라짐 → 빨간불 |
+| T3 회복 (정규화 on) | cross_session (상한은 같은 분할기·드리프트만 0) | off=0.4126 / on=0.5090 / ceiling_nodrift=0.5743 → 회복률 **0.5966** | ≥ 0.5 | PASS (여유 얇음, 아래 참조) | 타 세션 베이스라인 주입 → 회복률 −0.078 → 빨간불 |
+| T4 연습 효과 생존 | cross_session (b_ref·b_hat 둘 다 같은 파이프라인, 드리프트만 다름) | b_ref=−1.9951, b_hat=−2.5812 → 보존율 **1.294** | [0.5, 1.5] | PASS (여유 20%p, 아래 참조) | 세션 전체 산포로 나누는 과잉 정규화 주입 → 보존율 0.000266 → 빨간불. b_ref 자체가 죽는 대칭 주입도 `T4_REF_SLOPE_MIN=0.5` 가드가 별도로 차단(빨간불) |
+| T5 누수 | (가드 단위 테스트, 정확도 지표 없음) | 3개 전부 PASS | LeakageError 발생 | PASS | `check_normalization_source` 가드를 끄면 통과해버림 → 빨간불(가드가 실제로 막고 있었다는 뜻) |
+| T6 신뢰도 플래그 (2×2, `assignment: fixed_2x2`) | (플래그 판정, 정확도 지표 없음) | 세 시드(42·7·2026) 전부 완전 분리: s0=0.000, s1=1.000, s2=0.000, s3=1.000 | 세션0·2(핵심 음성 칸) 전원 비플래그 AND 세션1·3 전원 플래그 | PASS (baseline_duration_s=60 필요, 아래 참조) | 종료 베이스라인을 못 보게 만드는 주입 → 양성 칸(세션1·3) 플래그율 100%→0% → 빨간불 |
+| 참고 (T1~T6 아님) | **loso** (`pilot.yaml`) | pooled_accuracy=0.5959, **accuracy_worst(최악 fold)=0.3173**, chance=0.3333 | — | 스냅샷 기록용 | `tests/baselines/t2_pilot.json`, git_commit=2b9ec0f |
+
+**최악 피험자 성능**: T1~T6 실행은 `cross_session`(fold=세션)이라 "최악 피험자"
+개념이 없다(fold가 피험자가 아니라 세션이다). LOSO 기준 최악 피험자 성능은
+파일럿 스냅샷의 `accuracy_worst=0.3173`(chance 0.3333과 거의 같음 — 최악
+피험자 1명은 chance 수준)뿐이며, **이 값을 T1~T6의 cross_session 결과와
+같은 표에 섞지 않는다.**
+
+### 완료 — 실행 config·seed·commit
+
+| 승인기준 | config | seed | 최종 git commit(해당 결과가 확정된 시점) |
+|---|---|---|---|
+| T1·T2·T3 | `config/experiments/session_recovery.yaml` | 42 | `a763f7a`(T3 상한 재정정, PASS 확정) |
+| T4 | `config/experiments/session_clean.yaml` | 42 (+ 시드 스윕 0·1·7 참고) | `64d03f7` |
+| T5·T6 | `config/experiments/session_quality.yaml` | 42 (+ 7·2026 재현) | `a8f72a1`(최종 HEAD, T6 완전 분리 복원) |
+| 참고(LOSO 스냅샷) | `config/experiments/pilot.yaml` | 42 | `2b9ec0f` |
+
+### 완료 — 실행 중 발견해 고친 결함 5건
+
+1. **`aggregate()`가 80% 오버랩 창을 독립 베르누이 시행으로 취급** — `null.yaml`
+   (n=18000창, effect_size=0)에서 이항 SE=√(1/3·2/3/18000)=0.003513,
+   1.96·SE=0.006886이 관측 CI 반폭 0.006857과 정확히 일치해 확인. 세션을 3회로
+   늘리며 n이 커져 구간이 좁아진 것이 A+D부터 있던 결함을 드러냈다(**A+D부터
+   있었고 세션 도입이 드러냈다**). → fold 수준 t-신뢰구간(`fold_ci_low/high`,
+   자유도=n_folds−1)을 추가해 널·붕괴 판정을 이것으로 옮겼다. `pooled_ci_*`·
+   `binomtest_p`는 남기되 과소평가 사실을 `src/evaluation/metrics.py` docstring에
+   명시(하한으로만 읽으라고 경고).
+2. **§6.2 fNIRS `concentration_delta` 정규화가 곱셈 이득 드리프트를 못 지웠다** —
+   `y − mean(y_base) = gain·(x − mean(x_base))`로 뺄셈만 하면 `gain`이 남는다.
+   EEG `band_power_db`는 `10·log10(arr/reference)` 비율이라 이득이 자동 상쇄되므로
+   **두 모달리티가 비대칭**이었다. → `(x − μ)/σ`(베이스라인 표준편차, ddof=1)로
+   확장. **검증**: `within_session_rate=0`으로 두면 보존율이 정확히 **1.000000**
+   — 곱셈 이득·가산 오프셋을 완전히 소거한다는 직접 증거.
+3. **§6.3 `compute_drift`의 분모가 `|mean(baseline)|`였다** — fnirs 기울기 특징은
+   베이스라인(고정점 응시, 안정 상태)에서 평균이 정당하게 0 근처라 발산했다
+   (sub-04 세션2: 평균 집계 3.48 vs 기울기 집계 333.49, 세션2 vs 세션1 168.48 vs
+   2.12로 **116배 역전**). `zero_atol=1e-8`은 "정확히 0"만 걸러 이 스케일의
+   잡음을 하나도 못 걸렀다. → 분모를 베이스라인 산포(`std(start, ddof=1)`)로
+   교체. 결과 범위가 0.19~5.5(정상 스케일)로 정상화.
+4. **계약 결함 2건 (Task 10·12, A+D 시점엔 존재할 수 없던 것)** — (a) `trial_id`가
+   녹화마다 0부터 세어 세션 간 충돌 → `_check_trial_ids_globally_unique()` 추가.
+   (b) `check_window_overlap`이 세션마다 0부터 세는 `window_times`를 오탐 →
+   `(피험자, 세션)` 복합 키로 겹침 비교하는 6-인자 시그니처로 교체.
+5. **A+D 잔여 P1 — 오버라이드가 스키마 검증을 우회** (Task 1) — `run_experiment`가
+   `overrides` 병합 후 `validate_config`를 재호출하지 않아, 오타 난 오버라이드
+   키가 조용히 흡수되고 `_config_hash`만 바뀌어 새 결과 디렉토리가 생기던
+   결함. → override 병합 직후 `validate_config(cfg)` 재호출.
+
+### 완료 — 컨트롤러(작업 지시자)가 내린 판정 중 틀렸다가 되돌린 것
+
+1. **T3의 상한을 `within_subject`로 잡은 것이 틀렸다.** `within_subject`는 같은
+   세션 안에서 블록만 나누는 분할이라 모델이 그 세션의 채널 이득을 이미 본다 —
+   드리프트가 0이어도 도달 불가능(0.5743 vs 0.8583, 격차 0.284). 원 회복률
+   계산은 (a) 정규화가 못 지우는 드리프트 손상과 (b) 두 CV 방식의 본질적 격차를
+   합쳐 재고 둘 다 "정규화 부족" 탓으로 돌렸다(회복률 0.268 미달로 오판). →
+   상한을 `ceiling_nodrift`(같은 `cross_session` 분할기, 시그마만 0)로 정정하니
+   회복률 0.5966으로 PASS. 스펙 §12 항목 7에 이 격차 자체가 정규화 대상이
+   아니라는 원칙을 남겼다.
+2. **T4의 `b_ref`를 `normalize=False`(원 단위)로 정의한 채 §6.2를 정정한 것이
+   틀렸다.** §6.2가 분모에 베이스라인 산포를 추가한 뒤에도 `b_ref`를 원 단위로
+   두면 `b_hat`(정규화 단위)과 척도가 달라 비율이 발산했다(실측 72.07배).
+   → `b_ref`도 `normalize=True`로 재계산(드리프트만 0, 파이프라인은 동일) —
+   T3의 "같은 분할기, 드리프트만 다르다" 원칙을 단위 축에 그대로 적용. 이후
+   리뷰가 한 번 더 반증했다: `b_ref` 자신이 죽는 경로(양쪽 다 과잉정규화)에서
+   시드 0·1이 우연한 부호로 "거짓 PASS"를 냈다 — `T4_REF_SLOPE_MIN=0.5` 하한
+   가드를 추가해 막았다.
+3. **T6 기준을 완전 분리에서 플래그 비율(0.25/0.75)로 완화한 것이 틀렸다.**
+   "완전 분리는 도달 불가능"이라는 전제 자체가 거짓이었다 —
+   `baseline_duration_s`를 20→60(베이스라인 창 ~16개→~56개)으로 늘리면 세
+   시드(42·7·2026) 전부 완전 분리한다. 원인은 표본 수(`n_subjects`)가 아니라
+   **베이스라인 창 수**였고, 그것은 §6.3 분모를 SD로 바꾼 판정(항목 3)의
+   **대가**다(SD 추정이 창이 적으면 불안정). → 비율 완화를 철회하고 완전 분리
+   기준을 복원. `session_quality.yaml`만 `baseline_duration_s=60`으로 올렸다
+   (T2·T3가 이미 통과 중인 `session_recovery`·`session_clean`은 건드리지 않음).
+
+### 완료 — 실장비 프로토콜에 주는 함의
+
+**베이스라인 길이가 §6.3 드리프트 지표의 신뢰도를 결정한다.** 5초창·1초스텝
+(80% 오버랩) 기준 20초 베이스라인은 ~16개 창만 주어 SD 분모 추정이 불안정해지고,
+60초(~56개 창)에서는 세 시드 전부 안정적으로 재현됐다. CLAUDE.md §2.4가 매 세션
+베이스라인 측정을 의무화하지만 **길이 하한은 정하지 않는다** — 이번 관측(16개
+불안정/56개 안정)을 하한 설정의 근거로 쓸 수 있으나, 확정은 연구책임자 판단
+사항으로 남긴다.
+
+### 계획서 연계
+
+목표 3 — 서브프로젝트 B1(세션 베이스라인 인프라)의 승인기준 T1~T6이 전부
+PASS로 종료됐다. **다만 T3(여유 0.0156, fold CI 폭의 1/14)·T4(여유 20%p,
+단일/소수 시드)·T6(baseline_duration_s=60 필수, 세 시드 재현이지만 config
+자체가 세 번 판정을 오간 이력)의 PASS는 여유가 얇다** — "정규화가 확실히
+작동한다"는 강한 근거로 인용하지 않는다. **B1의 모든 정확도 수치는 A+D의
+임시 특징 추출기(`features_minimal`)와 더미 로지스틱 회귀에서 나온다** —
+계획서 목표치(이진 90%/다분류 85%, §계획서 검증 지표)와 나란히 놓지 않는다
+(스펙 §12 항목 6).
+
+### 미해결
+
+- [ ] `session_recovery.yaml`·`session_clean.yaml`(T2·T3·T4)이 여전히
+      `baseline_duration_s=20`을 쓴다 — T6과 같은 SD 추정 불안정성의 영향을
+      받을 수 있으나 **확인하지 않았다**. T2·T3·T4를 60초로 재실행해 결과가
+      바뀌는지 확인이 필요하다.
+- [ ] T2·T3는 `session_recovery.yaml`의 드리프트 시그마를 원안 대비 8배로
+      올려야만 붕괴(T2)가 재현됐다(1배 시그마에서는 off pooled=0.5532로 여전히
+      chance 초과) — **B1이 증명한 것은 "이 크기(8배 시그마)의 드리프트에
+      대해서만" 정규화가 회복시킨다는 것**이지 임의 크기의 드리프트에 대한
+      일반 증명이 아니다.
+- [ ] `null.yaml`의 남은 플래그(12/36)가 "정상"인지 판단할 사전 기준이 없다.
+- [ ] CLAUDE.md·프로토콜 문서에 베이스라인 측정 시간 하한을 명시할지 결정
+      필요(연구책임자 판단).
+
+상세: `docs/specs/2026-08-19-session-baseline-design.md` §8.4.1(정정 1~8),
+§12(한계), `.superpowers/sdd/2026-08-19-session-baseline/task-{14,15,16}-report.md`.

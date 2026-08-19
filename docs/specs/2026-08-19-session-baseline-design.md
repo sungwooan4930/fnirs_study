@@ -1084,6 +1084,35 @@ A+D에서 T3가 *피험자 혼입* 부풀림은 증명했으나 계획서가 최
    이 격차까지 메워야 한다"는 기준(예: 원래의 T3 상한 설계)을 다시 쓰지 않는다.
    상세: §8.2·§8.4.1.
 
+8. **T2·T3(cross_session 붕괴·회복)는 `session_recovery.yaml`의 드리프트 시그마
+   조정에 민감하다.** 브리프 원안 시그마(1배)로는 T2가 요구하는 붕괴가 재현되지
+   않았다 — 정규화 off에서도 pooled accuracy=0.5532로 chance(0.3333)를 넘었다
+   (`effect_size=0.8`의 진짜 인지 효과가 드리프트를 압도). fnirs_gain_sigma·
+   fnirs_offset_sigma·eeg_gain_sigma를 8배로 올려서야 붕괴가 재현됐다(off
+   pooled=0.4126). **T3가 증명하는 것은 "이 정도 크기(8배 시그마)의 드리프트에
+   대해서는 정규화가 회복시킨다"이지, 임의 크기의 드리프트에 대한 일반 증명이
+   아니다.** 시그마를 더 키우면 회복률(현재 0.5966, 여유 얇음)이 임계 0.5 아래로
+   떨어질 가능성을 배제하지 않는다.
+
+9. **T6의 2×2 배치는 `between_session_scale=4.0`에 실제로 의존한다.**
+   `src/simulation/session.py`의 `plan_sessions`는 `assignment: fixed_2x2`
+   (T6 전용 `session_quality.yaml`이 씀)일 때만 `between_session_scale`을
+   적용해 ①② 세션 간 드리프트를 4배로 키운다 — `assignment: sampled`
+   (T2·T3가 씀)에서는 `between_big`이 항상 `False`로 고정되어 이 파라미터가
+   **아예 적용되지 않는다**(§8.4.1 정정 참조). 즉 T2·T3의 결과는
+   `between_session_scale`과 무관하지만, T6의 "①②가 커도 ③이 작으면 플래그
+   안 됨" 판정은 `between_session_scale=4.0`이 실제로 ①②를 키워준다는 전제
+   위에 있다. 이 값을 바꾸면 T6의 2×2 대비가 약해질 수 있다.
+
+10. **T2·T3·T4가 쓰는 `session_recovery.yaml`·`session_clean.yaml`은 여전히
+    `baseline_duration_s=20`(베이스라인 창 ~16개)이다.** T6에서 같은 창 수가
+    §6.3 드리프트 지표(SD 분모)의 표집분산을 불안정하게 만드는 것을 확인했고
+    (§8.4.1 "정정 8"), 60초(~56개 창)로 늘리면 안정화됐다. T2·T3·T4는 이미
+    통과 중이라는 이유로 `baseline_duration_s`를 건드리지 않았으므로, **같은
+    불안정성이 T2·T3·T4의 실측값에 얼마나 영향을 주는지는 확인되지 않았다.**
+    T3의 회복률(여유 0.0156)·T4의 보존율(여유 20%p)이 이미 얇은 여유로 PASS한
+    상태라, 60초로 재실행했을 때 결과가 뒤집힐 가능성을 배제할 수 없다.
+
 이 한계들은 결과 보고 시 함께 기재한다(CLAUDE.md §5.4 성능 보고의 정직성).
 
 ---
