@@ -16,6 +16,7 @@ import json
 
 import numpy as np
 import pytest
+from scipy import stats as scipy_stats
 
 from src.common.config import load_config, validate_config
 from src.common.seeding import set_all_seeds
@@ -157,8 +158,16 @@ def test_t1_injection_2_load_dependent_drift_breaks_the_null(tmp_path, monkeypat
 
 # ---------------------------------------------------------------- T2·T3
 
-#: T3의 회복 기준. chance와 세션 내 성능 사이 간격의 이 비율 이상을 회복해야
-#: 한다. 관측에서 역산한 값이 아니라 사전에 선언한 요구 수준이다 (스펙 §8.4).
+#: T3의 회복 기준. `off`(정규화 없음)와 `ceiling_nodrift`(드리프트 비활성 +
+#: 정규화 없음, 같은 분할기·같은 시드) 사이 간격의 이 비율 이상을 `on`이
+#: 회복해야 한다. 관측에서 역산한 값이 아니라 사전에 선언한 요구 수준이다
+#: (스펙 §8.4). **`within_subject`("세션 내 성능")는 상한이 아니다** — 컨트롤러
+#: 정정(2026-08-19)으로 폐기됐다. 같은 세션 안에서 블록만 나누는 분할이라
+#: `cross_session`과 애초에 답하는 질문이 다르고, 드리프트가 전혀 없어도
+#: `cross_session`이 도달하지 못한다 (스펙 §8.4.1 실측: ceiling_nodrift=0.5743
+#: vs within_subject=0.8583). 이 상수의 이름·수치(0.5)는 그대로지만, 무엇을
+#: 상한으로 삼는지는 아래 `test_t3_normalization_recovers_most_of_the_gap`의
+#: `ceiling_nodrift` 계산을 봐야 정확하다.
 T3_GAP_RECOVERY_MIN = 0.5
 
 
@@ -210,10 +219,6 @@ _NO_DRIFT = {
     "within_session_rate": 0.0,
 }
 
-#: fold_ci와 같은 t-임계값(df=2, session_recovery.yaml이 세션 3개라
-#: cross_session fold도 3개). 새 상수를 지어내는 게 아니라 fold_ci를 낼 때
-#: 이미 쓰인 값을 재사용해 "드리프트가 낸 손상이 유의미한가"를 잰다.
-_T_CRIT_DF2 = 4.303
 
 
 @pytest.mark.slow
@@ -257,10 +262,13 @@ def test_t3_normalization_recovers_most_of_the_gap(tmp_path):
     assert off["cv_method"] == "cross_session"
 
     # 드리프트가 실제로 손상을 냈는지 먼저 확인한다 — 손상이 없으면 회복도
-    # 공허하다. off 자신의 fold 수준 표준오차(fold_ci 폭에서 역산, df=2)보다
-    # 큰 차이를 요구한다 — 새 임계를 지어내지 않고 이미 있는 불확실성
-    # 추정을 재사용한다.
-    sem_off = (off["fold_ci_high"] - off["fold_ci_low"]) / (2 * _T_CRIT_DF2)
+    # 공허하다. off 자신의 fold 수준 표준오차(fold_ci 폭에서 역산)보다 큰
+    # 차이를 요구한다. t 임계값은 df=2를 하드코딩하지 않고 off 자신의
+    # `n_folds`에서 유도한다(session_recovery.yaml의 n_sessions을 바꿔도
+    # 조용히 틀리지 않도록) — src/evaluation/metrics.py가 fold_ci를 낼 때
+    # 쓰는 것과 같은 식(`stats.t.ppf(0.975, df=n_folds-1)`)이다.
+    t_crit = scipy_stats.t.ppf(0.975, df=off["n_folds"] - 1)
+    sem_off = (off["fold_ci_high"] - off["fold_ci_low"]) / (2 * t_crit)
     damage = ceiling_nodrift["pooled_accuracy"] - off["pooled_accuracy"]
     assert damage > sem_off, (
         f"드리프트가 낸 손상({damage:.4f})이 off 자신의 표준오차({sem_off:.4f})"
@@ -290,6 +298,14 @@ def test_t3_injection_foreign_baseline_fails_to_recover(tmp_path, monkeypatch):
     이 몽키패치(`SessionBaseline.fit`)의 영향을 받지 않는다 —
     `build_dataset`이 `normalize`가 꺼져 있으면 `SessionBaseline`을 아예
     호출하지 않기 때문이다.
+
+    **`scale`을 반드시 함께 넘긴다.** 넘기지 않으면 `SessionBaseline.__init__`
+    의 기본값(`scale=None`)이 적용돼 `concentration_delta`가 옛 동작(뺄셈만,
+    §6.2 이득 보정 없음)으로 조용히 되돌아간다 — "타 세션 베이스라인" 하나만
+    주입하려던 의도와 달리 "이득 보정 비활성화"까지 함께 주입해버려, 이 결함
+    주입이 실제로는 두 가지 결함을 섞어 재는 것이 된다. `real.scale`(같은
+    세션 자신의 산포)을 그대로 넘겨 참조(`reference`)만 타 세션 것으로
+    바뀌도록 한다.
     """
     from src.preprocessing.baseline import SessionBaseline
 
@@ -300,7 +316,7 @@ def test_t3_injection_foreign_baseline_fails_to_recover(tmp_path, monkeypatch):
         def fit(cls, start_baseline, kind):
             real = SessionBaseline.fit(start_baseline, kind)
             reference = cache.setdefault(kind, real.reference)
-            return SessionBaseline(reference=reference, kind=kind)
+            return SessionBaseline(reference=reference, kind=kind, scale=real.scale)
 
     monkeypatch.setattr(runner_mod, "SessionBaseline", _ForeignBaseline)
     off = _run({"preprocessing": {"baseline": {"normalize": False}}}, tmp_path / "off")
