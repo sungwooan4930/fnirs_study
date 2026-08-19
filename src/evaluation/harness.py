@@ -13,6 +13,11 @@ within-subject CV는 같은 피험자가 train/test 양쪽에 있는 것이 설�
 경계를 따라 나뉘므로 창이 경계를 넘지 않아 가드를 통과하고, 의도적으로
 누수를 일으키는 window_random 분할기는 여기서 걸린다.
 
+세션 중첩 가드도 분할기의 선언(`allows_same_session`)을 존중한다.
+within-subject CV는 세션 안에서 시행을 나누므로 같은 세션이 양쪽에 있는 것이
+설계 그 자체다. 반면 정규화 출처 가드는 어떤 분할기에서도 예외가 없다 —
+기준 구간이 분석 데이터에 섞이는 것은 분할 방식과 무관한 오류이기 때문이다.
+
 단일 클래스 fold는 train 쪽뿐 아니라 **test 쪽도** 거부한다. 스펙 §9의
 문구는 "특정 fold에서 클래스가 1개뿐 → 실행 거부"이지 "train fold"가
 아니다. test가 단일 클래스면 그 fold의 정확도는 판별력이 아니라 다수
@@ -28,7 +33,12 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.evaluation.guards import check_subject_overlap, check_window_overlap
+from src.evaluation.guards import (
+    check_normalization_source,
+    check_session_overlap,
+    check_subject_overlap,
+    check_window_overlap,
+)
 
 
 @dataclass(frozen=True)
@@ -68,17 +78,27 @@ def run_folds(
     results: list[FoldResult] = []
 
     allows_same_subject = getattr(splitter, "allows_same_subject", False)
+    allows_same_session = getattr(splitter, "allows_same_session", False)
 
     for fold in dataset.iter_folds(splitter, stratify_target=target):
         train_subj = fold.train.subject_ids()
         test_subj = fold.test.subject_ids()
+        train_sess = fold.train.session_ids()
+        test_sess = fold.test.session_ids()
 
         if guards.get("check_subject_overlap", True) and not allows_same_subject:
             check_subject_overlap(train_subj, test_subj)
+        if guards.get("check_session_overlap", True) and not allows_same_session:
+            check_session_overlap(train_subj, train_sess, test_subj, test_sess)
         if guards.get("check_window_overlap", True):
             check_window_overlap(
-                train_subj, fold.train.window_times(),
-                test_subj, fold.test.window_times(),
+                train_subj, train_sess, fold.train.window_times(),
+                test_subj, test_sess, fold.test.window_times(),
+            )
+        if guards.get("check_normalization_source", True):
+            check_normalization_source(
+                fold.train.normalization_source(),
+                fold.test.normalization_source(),
             )
 
         y_train = fold.train.y(target)
