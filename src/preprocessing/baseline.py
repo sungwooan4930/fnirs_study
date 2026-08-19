@@ -10,6 +10,10 @@ CLAUDE.md §3.8을 구현한다. 정규화는 **세션 단위로 독립 수행**
 
 드리프트 계산은 시작·종료 베이스라인을 모두 봐야 하므로 클래스 메서드가
 아니라 별도 함수다. `fit`이 시작 베이스라인만 받는다는 요점을 지키기 위함이다.
+
+**2026-08-19 정정 (Task 14/T3):** `concentration_delta`가 뺄셈만 하던
+초판은 틀렸다. 근거·수정 내용은 `SessionBaseline` 클래스 docstring과
+`docs/specs/2026-08-19-session-baseline-design.md` §6.2를 참조.
 """
 
 from __future__ import annotations
@@ -20,7 +24,7 @@ import numpy as np
 
 #: 정규화 종류. CLAUDE.md §3.8의 세 규칙에 대응한다.
 NORMALIZATION_KINDS: tuple[str, ...] = (
-    "concentration_delta",   # fNIRS HbO/HbR — 시작 베이스라인 평균 기준
+    "concentration_delta",   # fNIRS HbO/HbR — 시작 베이스라인 평균·산포 기준
     "band_power_db",         # EEG 대역 파워 — 시작 베이스라인 대비 dB
     "absolute",              # 행동 — 변환하지 않는다
 )
@@ -36,6 +40,12 @@ MODALITY_KIND: dict[str, str] = {
 
 #: dB 변환에서 log의 정의역을 지키기 위한 하한.
 _DB_FLOOR: float = 1e-12
+
+#: `concentration_delta`가 베이스라인 산포로 나눌 때의 하한. 채널이 거의
+#: 상수(σ≈0)면 나눗셈이 발산하거나 잡음을 극단적으로 증폭한다 —
+#: `compute_drift`의 `zero_atol`과 같은 결의 방어다. `config`의
+#: `zero_atol` 기본값(1e-8)과 자릿수를 맞췄다.
+_SCALE_FLOOR: float = 1e-8
 
 
 @dataclass(frozen=True)
@@ -55,15 +65,70 @@ class SessionQuality:
 
 
 class SessionBaseline:
-    """한 세션의 시작 베이스라인을 기준으로 삼는 정규화기."""
+    """한 세션의 시작 베이스라인을 기준으로 삼는 정규화기.
 
-    def __init__(self, reference: np.ndarray, kind: str) -> None:
+    **`concentration_delta`가 왜 뺄셈만으로는 부족한가.** 옵토드 재부착으로
+    생기는 세션 간 드리프트의 지배적 성분은 결합도·유효 광경로 변화이며,
+    이는 **곱셈적**이다 — 세션의 신호를 `y = gain·x + offset` 형태로 모델링할
+    수 있다(`gain`이 결합도, `offset`이 잔여 오프셋). 시작 베이스라인 평균을
+    빼기만 하면
+
+        y - mean(y_base) = gain·(x - mean(x_base))
+
+    이 되어 **오프셋은 지워지지만 이득(gain)은 그대로 남는다.** 세션마다
+    다른 `gain`이 잔류하면, 세션 간 분류기는 진짜 인지상태 신호가 아니라
+    이 잔류 스케일 차이를 학습할 수 있다 — Task 14 T3(회복) 검증에서 (이
+    정정 이전, 뺄셈만 하던 원안 기준) 실측 회복률이 0.268(요구 ≥0.5)에
+    그쳤고, `fnirs_gain_sigma=0`으로 두면(다른 드리프트는 유지) 회복률이
+    0.378로 오르는 것으로 원인이 확인됐다. 아래 수정을 적용한 뒤 회복률은
+    0.335로 개선됐다(잔여 미달의 원인은 정규화가 아니라 `cross_session`·
+    `within_subject` 두 분할 방식의 구조적 난이도 차이 — 상세는
+    `docs/specs/2026-08-19-session-baseline-design.md` §8.4.1). (참고로
+    EEG의 `band_power_db`는 애초에 **비율** `10·log10(y/mean(y_base))`이라
+    `gain`이 분자·분모에서 상쇄되므로 이 문제가 없다 — 두 모달리티가
+    비대칭이었다.)
+
+    그래서 `concentration_delta`는 베이스라인 산포로도 나눈다:
+
+        (y - mean(y_base)) / std(y_base)
+            = (gain·x + offset - (gain·mean(x_base) + offset)) / (gain·std(x_base))
+            = (x - mean(x_base)) / std(x_base)
+
+    `gain`이 분자·분모 양쪽에 곱해져 있어 소거된다. 결과 단위는 **베이스라인
+    산포 대비 배수**(무차원)로 바뀐다 — 더 이상 원래의 농도 단위가 아니다.
+
+    **이것이 "세션 전체를 z-score"하는 것과 다른 이유.** 분모(`std`)는
+    **베이스라인 블록**의 산포이지 세션 전체(베이스라인+과제)의 산포가
+    아니다. 베이스라인은 안정 상태 측정이라 정의상 과제 반응을 담지 않는다
+    — 따라서 분모는 순수하게 "그 세션·그 채널의 잡음/생리적 배경 변동
+    스케일"만 반영하고, 분자의 과제 반응 크기(= 연습 효과가 만드는 신호
+    변화)는 그대로 보존된다. 세션 전체를 z-score하면 분모에 과제 반응 자체의
+    분산이 섞여 들어가 신호를 갉아먹는다 — Task 15(T4, 기울기 보존율)가
+    정확히 이 성질을 검증하도록 설계돼 있다.
+
+    `kind`는 `fit`에서 한 번만 받는다. `apply`가 다시 받으면 fit과 다른
+    `kind`를 넘길 수 있게 되고, 그건 의미 있는 사용처가 없으면서 조용히
+    틀릴 수 있는 경로다.
+    """
+
+    def __init__(
+        self, reference: np.ndarray, kind: str, scale: np.ndarray | None = None
+    ) -> None:
         self.reference = reference
         self.kind = kind
+        #: `concentration_delta`에서만 쓰는 베이스라인 산포(ddof=1, 이미
+        #: `_SCALE_FLOOR`로 하한 처리됨). 다른 kind는 `None`.
+        #: 기본값을 두는 이유: 외부에서 `SessionBaseline(reference=..., kind=...)`
+        #: 처럼 `fit`을 거치지 않고 직접 구성하는 테스트 훅(예: 결함 주입)이
+        #: 이미 존재하고, 그 경로까지 이 정정으로 깨뜨릴 이유가 없다. 다만
+        #: `scale=None`인 채로 `concentration_delta`를 `apply`하면 옛 동작
+        #: (뺄셈만, gain 미보정)으로 되돌아간다는 점은 호출자가 알아야 한다.
+        self.scale = scale
 
     @classmethod
     def fit(cls, start_baseline: np.ndarray, kind: str) -> SessionBaseline:
-        """시작 베이스라인 창들의 평균을 기준으로 삼는다.
+        """시작 베이스라인 창들의 평균(과 `concentration_delta`라면 산포)을
+        기준으로 삼는다.
 
         `start_baseline`은 (n_baseline_windows, n_features)다.
         """
@@ -82,7 +147,17 @@ class SessionBaseline:
                 "baseline block produced no windows; 정규화 기준 구간을 만들 수 "
                 "없다. baseline_duration_s가 window_s보다 짧지 않은지 확인하라"
             )
-        return cls(reference=arr.mean(axis=0), kind=kind)
+        scale = None
+        if kind == "concentration_delta":
+            if arr.shape[0] >= 2:
+                scale = arr.std(axis=0, ddof=1)
+            else:
+                # 창이 하나뿐이면 표본 표준편차(ddof=1)가 정의되지 않는다
+                # (0/0). 아래 _SCALE_FLOOR 하한이 곧바로 적용되도록 0으로
+                # 시작한다 — NaN을 만들어 하한 클램프를 무력화하지 않는다.
+                scale = np.zeros(arr.shape[1])
+            scale = np.maximum(scale, _SCALE_FLOOR)
+        return cls(reference=arr.mean(axis=0), kind=kind, scale=scale)
 
     def apply(self, x: np.ndarray) -> np.ndarray:
         """정규화를 적용한다. `kind`는 fit에서 이미 고정됐다."""
@@ -93,7 +168,10 @@ class SessionBaseline:
                 f"{len(self.reference)}"
             )
         if self.kind == "concentration_delta":
-            return arr - self.reference
+            centered = arr - self.reference
+            if self.scale is None:
+                return centered
+            return centered / self.scale
         if self.kind == "band_power_db":
             num = np.maximum(arr, _DB_FLOOR)
             den = np.maximum(self.reference, _DB_FLOOR)

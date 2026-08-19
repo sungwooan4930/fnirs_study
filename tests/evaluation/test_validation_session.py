@@ -124,16 +124,19 @@ def test_t1_injection_2_load_dependent_drift_breaks_the_null(tmp_path, monkeypat
     세션 단위로 한 번 뽑아야 할 것을 블록 루프 안에서 뽑으면 이렇게 된다.
     드리프트 자체가 부하의 대리변수가 된다.
 
-    브리프 원안의 계수(0.5)는 pooled_ci는 깨지만(pooled_ci_low=0.345 >
-    chance) fold_ci는 못 깼다 — fold=3, df=2라 t(0.975,2)=4.303으로 구간이
-    넓고, fold 간 분산이 신호를 가린다. T2를 붕괴시키려고
-    `session_recovery.yaml`의 드리프트 시그마를 8배로 올린 뒤로는(아래
-    T2 참조) 배경 잡음이 커져서 계수 6.0으로도 fold_ci를 못 깼다(재확인
-    시 fold_ci_low=0.322). 새 기준선에서 다시 스윕한 결과 16~20에서
-    간신히 넘기 시작해 30 이상은 효과가 정체됐다(30→fold_ci_low=0.354,
-    40→0.356). 여유를 두어 30.0을 채택했다 — 실제 구현 버그라면 이 정도
-    배율이 아니라도 훨씬 뚜렷하게 드러났을 것이므로, 이만큼 세게 주입해야
-    겨우 깨진다는 사실 자체가 fold_ci(3-fold, df=2)의 보수성을 보여준다.
+    **곱셈(이득) 형태에서 덧셈(오프셋) 형태로 바꿨다.** `src/preprocessing/
+    baseline.py`가 `concentration_delta`에 베이스라인 산포로 나누는 보정을
+    추가한 뒤(Task 14 컨트롤러 정정 — fNIRS 곱셈 이득 드리프트를 소거하기
+    위함), 곱셈 이득 기반 주입(`hbo *= 1 + k*load`)이 **바로 그 보정이
+    상쇄하는 대상**이 되어 계수를 30→150까지 올려도 fold_ci_low가 0.29대에
+    고정되고 더 이상 못 깼다 — 정규화가 제 역할을 하고 있다는 방증이지만,
+    이 테스트의 목적(드리프트가 부하의 대리변수가 되는 버그를 잡는 것)에는
+    맞지 않는다. 그래서 **베이스라인 구간에는 나타나지 않고 과제 블록에서만
+    부하에 비례해 나타나는 덧셈 오프셋**(`hbo += k*load`)으로 바꿨다 —
+    세션 시작 베이스라인만 보는 정규화는 이런 블록별 오프셋을 원리적으로
+    잡을 수 없다(§3.8: 세션 내 드리프트는 애초에 보정이 아니라 플래그
+    대상). 계수 0.05만으로도 fold_ci_low=0.639로 chance(0.333)를 크게
+    넘어(mean 0.83) 명확히 깬다.
     """
     real = generate_dataset
 
@@ -141,8 +144,8 @@ def test_t1_injection_2_load_dependent_drift_breaks_the_null(tmp_path, monkeypat
         out = []
         for rec in real(sim_cfg, rng):
             t = np.arange(rec.hbo.shape[1]) / rec.fnirs_sfreq
-            gain = 1.0 + 30.0 * rec.timeline.effective_load(t)
-            out.append(dataclasses.replace(rec, hbo=rec.hbo * gain[None, :]))
+            offset = 0.05 * rec.timeline.effective_load(t)
+            out.append(dataclasses.replace(rec, hbo=rec.hbo + offset[None, :]))
         return out
 
     monkeypatch.setattr(runner_mod, "generate_dataset", _load_dependent)

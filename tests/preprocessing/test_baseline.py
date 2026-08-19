@@ -21,11 +21,63 @@ def test_fit_signature_cannot_receive_another_session():
     assert params == ["start_baseline", "kind"]
 
 
-def test_concentration_delta_subtracts_the_reference():
-    base = np.array([[1.0, 2.0], [3.0, 4.0]])          # 평균 (2.0, 3.0)
+def test_concentration_delta_subtracts_and_scales_by_baseline_spread():
+    """2026-08-19 정정(Task 14/T3): 뺄셈만으로는 곱셈 이득(gain)이 남는다
+    (docstring 참조). 이제 베이스라인 산포(ddof=1)로도 나눈다.
+    """
+    base = np.array([[1.0, 2.0], [3.0, 4.0]])          # 평균 (2.0, 3.0), std(ddof=1) = √2
     sb = SessionBaseline.fit(base, "concentration_delta")
     out = sb.apply(np.array([[2.0, 3.0], [5.0, 3.0]]))
-    assert np.allclose(out, [[0.0, 0.0], [3.0, 0.0]])
+    scale = np.sqrt(2.0)
+    assert np.allclose(out, [[0.0, 0.0], [3.0 / scale, 0.0]])
+
+
+def test_concentration_delta_cancels_multiplicative_gain():
+    """이 정정의 존재 이유: y = gain·x + offset일 때, gain이 세션마다 달라도
+    (양수인 한) 정규화 결과가 같아야 한다. 이게 안 되면 세션 간 분류기가
+    진짜 인지상태가 아니라 잔류 gain 차이를 학습한다 (Task 14 T3 실측:
+    회복률 0.268 → fnirs_gain_sigma=0일 때 0.378로 상승, 원인이 이것임을 확인).
+    """
+    rng = np.random.default_rng(0)
+    x_base = rng.normal(size=(20, 3))
+    x_task = rng.normal(size=(5, 3)) + 1.5  # 진짜 과제 반응
+
+    def normalize_under(gain: float, offset: float) -> np.ndarray:
+        y_base = gain * x_base + offset
+        y_task = gain * x_task + offset
+        sb = SessionBaseline.fit(y_base, "concentration_delta")
+        return sb.apply(y_task)
+
+    out_gain1 = normalize_under(1.0, 0.0)
+    out_gain5 = normalize_under(5.0, -3.0)
+    out_gain_small = normalize_under(0.2, 10.0)
+    assert np.allclose(out_gain1, out_gain5, atol=1e-9)
+    assert np.allclose(out_gain1, out_gain_small, atol=1e-9)
+
+
+def test_concentration_delta_without_scale_falls_back_to_subtraction_only():
+    """`fit`을 거치지 않고 `reference`만 직접 구성하는 기존 훅(예: 결함 주입
+    테스트)과의 호환성. `scale=None`이면 옛 동작(뺄셈만)으로 되돌아간다."""
+    sb = SessionBaseline(reference=np.array([2.0, 3.0]), kind="concentration_delta")
+    out = sb.apply(np.array([[5.0, 3.0]]))
+    assert np.allclose(out, [[3.0, 0.0]])
+
+
+def test_near_constant_baseline_channel_does_not_divide_by_zero():
+    """σ≈0인 채널(거의 상수)이 있어도 발산하지 않는다 — `_SCALE_FLOOR` 하한."""
+    base = np.array([[5.0], [5.0], [5.0]])  # std(ddof=1) == 0
+    sb = SessionBaseline.fit(base, "concentration_delta")
+    out = sb.apply(np.array([[6.0]]))
+    assert np.isfinite(out).all()
+
+
+def test_single_baseline_window_does_not_produce_nan_scale():
+    """베이스라인 창이 하나뿐이면 ddof=1 표준편차가 정의되지 않는다(0/0) —
+    NaN이 아니라 `_SCALE_FLOOR`로 클램프돼야 한다."""
+    base = np.array([[5.0, 2.0]])  # n=1
+    sb = SessionBaseline.fit(base, "concentration_delta")
+    out = sb.apply(np.array([[6.0, 2.0]]))
+    assert np.isfinite(out).all()
 
 
 def test_band_power_db_is_zero_at_the_reference_and_3db_when_doubled():

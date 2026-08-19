@@ -209,7 +209,7 @@ def compute_drift(start_baseline, end_baseline, *, zero_atol) -> SessionDrift: .
 
 | kind | 대상 | 처리 |
 |---|---|---|
-| `concentration_delta` | fNIRS HbO/HbR | 시작 베이스라인 평균을 기준으로 고정 (mBLL이 이미 변화량을 내므로 그 기준 구간을 확정하는 일) |
+| `concentration_delta` | fNIRS HbO/HbR | 시작 베이스라인의 **평균과 산포**를 기준으로 고정: `(x - 베이스라인 평균) / 베이스라인 표준편차(ddof=1)` |
 | `band_power_db` | EEG 대역 파워 | 시작 베이스라인 대비 dB. 절대 µV²는 세션 간 비교에 쓰지 않음 |
 | `absolute` | 행동 (정오답률·반응시간) | **변환하지 않음.** 장비 재부착의 영향을 받지 않으므로 |
 
@@ -218,6 +218,49 @@ def compute_drift(start_baseline, end_baseline, *, zero_atol) -> SessionDrift: .
 
 `absolute`가 무변환이라고 해서 생략 가능한 것은 아니다. 명시적 `kind`를 요구해서
 "행동에 어떤 정규화를 적용할지 생각하지 않고 넘어가는" 경로를 막는다.
+
+**2026-08-19 정정 (Task 14/B1, T3에서 발견) — `concentration_delta`가 뺄셈만
+하던 원안은 부족했다.** 옵토드 재부착의 지배적 효과는 결합도·유효 광경로
+변화이며 이는 **곱셈적**이다(`y = gain·x + offset`). 뺄셈(`x - 베이스라인 평균`)은
+`offset`만 지우고 세션마다 다른 `gain`은 남긴다:
+
+```
+y - mean(y_base) = gain·(x - mean(x_base))     ← 이득이 여전히 남는다
+```
+
+반면 EEG의 `band_power_db`는 **비율**(`10·log10(y/mean(y_base))`)이라 `gain`이
+분자·분모에서 자동으로 상쇄된다 — 두 모달리티가 애초에 비대칭이었다. Task 14의
+T3(회복) 검증에서 이 비대칭이 실측으로 드러났다: 회복률이 0.268(요구 ≥0.5)에
+그쳤고, `fnirs_gain_sigma=0`으로 두면(다른 드리프트는 유지) 회복률이 0.378로
+오르는 것으로 원인이 확인됐다.
+
+고친 식은 베이스라인 **산포**로도 나눈다:
+
+```
+(y - mean(y_base)) / std(y_base)
+    = (gain·x + offset - (gain·mean(x_base) + offset)) / (gain·std(x_base))
+    = (x - mean(x_base)) / std(x_base)      ← gain이 분자·분모에서 상쇄
+```
+
+수정 후 결과 단위는 **베이스라인 산포 대비 배수**(무차원)로 바뀐다. 분모가
+**베이스라인 블록**(과제 반응이 없는 안정 상태)의 산포이지 세션 전체의 산포가
+아니므로, 과제 반응의 크기(연습 효과가 만드는 신호 변화)는 분자에 그대로
+보존된다 — "세션 전체 z-score"와 다른 지점이며, Task 15(T4, 기울기 보존율)가
+정확히 이 성질을 검증한다. σ≈0인 채널은 `_SCALE_FLOOR`(1e-8)로 하한 처리해
+발산을 막는다. 구현: `src/preprocessing/baseline.py`의 `SessionBaseline` 클래스
+docstring 참조.
+
+수정 후 T3 재실측: 회복률 0.268 → **0.335**로 개선됐으나 여전히 0.5 미달이다.
+잔여 격차의 원인을 추적한 결과, 드리프트를 전부 0으로 둬도(`fnirs_gain_sigma
+=fnirs_offset_sigma=eeg_gain_sigma=eeg_noise_sigma=within_session_rate=0`)
+cross_session 정확도가 0.5112로 within_subject 상한(0.8586)에 크게 못 미쳐
+같은 회복률(0.339)이 나온다 — 즉 **잔여 격차의 대부분은 드리프트나 정규화
+문제가 아니라, `cross_session`(피험자 내·세션 간 일반화)과 `within_subject`
+(세션 내 일반화)의 근본적인 난이도 차이다.** `cross_session`은 fold 3개(세션
+수)뿐이고 학습에 쓸 수 있는 세션이 2개뿐인 반면 `within_subject`는 같은
+세션 안에서 블록만 나누므로 원리적으로 훨씬 쉽다. 이는 정규화로 고칠 수 있는
+문제가 아니다. 상세: `run_logging.md`,
+`.superpowers/sdd/2026-08-19-session-baseline/task-14-report.md`.
 
 ### 6.3 신뢰도 플래그
 
@@ -474,12 +517,23 @@ A+D의 T3에서 근거 없이 "15pp 향상"을 적어놨다가 실측 7.55pp를 
 
 ### 8.4.1 파일럿 관측 (session_recovery.yaml, seed 42)
 
+**정정 전 (concentration_delta = 뺄셈만):**
+
 | 조건 | pooled accuracy | fold CI (t, df=n_folds−1) | chance |
 |---|---|---|---|
 | cross_session · 정규화 off | 0.4126 | [0.1500, 0.6751] | 0.3333 |
 | cross_session · 정규화 on | 0.4742 | [0.3101, 0.6384] | 0.3333 |
 | within_subject (상한) | 0.8583 | [0.8139, 0.9033] | 0.3333 |
-| T3 회복률 | **0.268** | — | 요구 ≥ 0.5 (미달) |
+| T3 회복률 | 0.268 | — | 요구 ≥ 0.5 (미달) |
+
+**정정 후 (concentration_delta = 뺄셈 + 베이스라인 산포로 나눔, §6.2 참조):**
+
+| 조건 | pooled accuracy | fold CI (t, df=n_folds−1) | chance |
+|---|---|---|---|
+| cross_session · 정규화 off | 0.4126 (불변 — off는 정규화를 안 씀) | [0.1500, 0.6751] | 0.3333 |
+| cross_session · 정규화 on | 0.5090 | [0.3965, 0.6216] | 0.3333 |
+| within_subject (상한) | 0.8583 | [0.8139, 0.9033] | 0.3333 |
+| **T3 회복률** | **0.335** | — | 요구 ≥ 0.5 (여전히 미달) |
 
 **임계를 절대 수치로 두지 않았다.** T2는 chance가 fold 수준 t-CI 안에 있는지로,
 T3는 `within_subject` 상한 대비 회복률로 판정한다. 둘 다 그 실행 자신이 만드는
@@ -493,30 +547,39 @@ T3는 `within_subject` 상한 대비 회복률로 판정한다. 둘 다 그 실�
 강도를 올리는 손잡이는 `fnirs_gain_sigma`·`fnirs_offset_sigma`·`eeg_gain_sigma`
 뿐이었다. 이 셋을 8배로 올려(무작위 잡음인 `eeg_noise_sigma`는 그대로 두었다 —
 정규화로 고칠 수 없는 잡음을 늘리는 것은 "드리프트 강화"가 아니다) off를
-chance 근처로 무너뜨렸다.
+chance 근처로 무너뜨렸다. **정규화 정정 후에도 시그마를 원안으로 되돌릴 수
+없었다** — off는 정규화를 쓰지 않는 조건이라 §6.2 정정의 영향을 받지 않고,
+원안 시그마에서는 여전히 pooled 0.5532로 붕괴하지 않는다(재확인 완료). 8배
+시그마를 그대로 유지한다.
 
-**T3는 임계(0.5)를 만족하지 못했다 — 원인을 규명했고, 임계를 낮추지 않고
-미달로 보고한다.** §6.2 구현을 의심해 원인을 추적한 결과, 코드 버그가 아니라
-정규화 **설계**의 한계였다:
+**T3는 §6.2를 정정한 뒤에도 임계(0.5)를 만족하지 못했다 — 임계를 낮추지 않고
+다시 미달로 보고한다.** §6.2를 컨트롤러 지시로 정정했다 — `concentration_delta`
+가 `(x - 베이스라인 평균) / 베이스라인 표준편차`로 바뀌어 fNIRS 곱셈 이득
+드리프트를 EEG의 dB 비율 정규화처럼 소거한다(상세: §6.2 정정 기록,
+`src/preprocessing/baseline.py`). 회복률은 0.268 → **0.335**로 개선됐으나
+여전히 0.5에 못 미친다. 남은 격차를 원인별로 분해했다:
 
-1. **fNIRS `concentration_delta` 정규화는 덧셈 보정만 한다** (`arr - reference`).
-   시뮬레이터가 fNIRS에 주입하는 드리프트는 곱셈 이득(`fnirs_gain`)과 덧셈
-   오프셋(`fnirs_offset`) 둘 다인데, 뺄셈은 오프셋만 지우고 세션마다 다른 이득은
-   지우지 못한다. (EEG의 `band_power_db`는 **비율**(`10·log10(arr/reference)`)이라
-   이득이 자동으로 상쇄된다 — fNIRS와 비대칭이다.) 확인: `fnirs_gain_sigma=0`으로
-   두면(다른 드리프트는 그대로) 회복률이 0.268 → 0.378로 오른다.
-   이 설계는 CLAUDE.md §3.8·본 스펙 §6.2가 "mBLL 출력은 이미 변화량이므로 시작
-   베이스라인만 고정한다"고 명시한 그대로이므로, T14 범위에서 고칠 수 있는
-   구현 버그가 아니라 §6 설계 자체의 재검토 대상이다.
-2. **세션 내 드리프트는 원래 보정 대상이 아니라 플래그 대상이다** (§3.8 표 —
-   "시작·종료 베이스라인 차이로 추정"). `within_session_rate`가 0이 아닌 세션의
-   후반부 창은 시작 베이스라인만으로는 보정되지 않는다. 이것도 설계가 의도한
-   동작이다.
+1. **드리프트를 전부 0으로 둔 "청정" cross_session도 within_subject 상한에
+   크게 못 미친다.** `fnirs_gain_sigma=fnirs_offset_sigma=eeg_gain_sigma=
+   eeg_noise_sigma=within_session_rate=0`으로 두면 cross_session pooled
+   accuracy는 0.5112(회복률로 환산하면 0.339)로, 8배 시그마 조건의 0.5090과
+   **거의 같다.** 즉 잔여 격차는 주입한 드리프트의 크기와 거의 무관하다.
+2. **세션 내 드리프트만 0으로 둬도(다른 드리프트는 8배 유지)** on=0.511,
+   회복률 0.338로 8배 조건(0.335)과 차이가 없다. §3.8이 세션 내 드리프트를
+   보정이 아니라 플래그 대상으로 규정한 것과는 별개로, 이 파일럿 규모에서는
+   그 기여가 미미하다.
+3. **결론: 남은 격차의 대부분은 드리프트·정규화 문제가 아니라
+   `cross_session`과 `within_subject` 두 분할 방식의 근본적 난이도 차이다.**
+   `cross_session`은 세션 3개 중 2개로 학습해 1개를 맞히는 leave-one-
+   session-out(fold 3개)인 반면, `within_subject`는 같은 세션 안에서 블록만
+   나눠 fold를 만든다(세션 간 이동 자체를 겪지 않는다) — 정규화가 완벽해도
+   메워지지 않는 구조적 차이다.
 
-두 원인 모두 실제 코드 결함이 아니라 §6.2가 명시적으로 선택한 정규화 범위의
-한계이므로, 이 자리에서 정규화 로직을 고치지 않았다. T3는 **실패로 보고**한다
-(CLAUDE.md §5.4). 상세 근거는 `.superpowers/sdd/2026-08-19-session-baseline/
-task-14-report.md` 참조.
+정규화 설계 결함(§6.2)은 이번에 고쳤지만, 남은 미달은 정규화로 고칠 수 있는
+성질이 아니므로 이 자리에서 추가로 손대지 않는다. T3는 계속 **실패로 보고**
+한다(CLAUDE.md §5.4) — 이 판정을 다시 되돌릴지는 컨트롤러 몫이다. 상세 근거는
+`.superpowers/sdd/2026-08-19-session-baseline/task-14-report.md`,
+`run_logging.md` 참조.
 
 ---
 

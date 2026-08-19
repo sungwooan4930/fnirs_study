@@ -850,3 +850,67 @@ within=0.8583 / chance=0.3333 → **회복률 0.268 (요구 ≥ 0.5, 미달)**.
 
 상세: `docs/specs/2026-08-19-session-baseline-design.md` §8.4.1,
 `.superpowers/sdd/2026-08-19-session-baseline/task-14-report.md`.
+
+### 2026-08-19 (후속) — 컨트롤러 판정: §6.2 정규화 설계 정정, T3 여전히 미달
+
+위 T3 원인 규명(fNIRS `concentration_delta`가 뺄셈만 해 곱셈 이득 드리프트를
+못 지운다)을 컨트롤러가 산술로 재확인하고 **§6.2를 고치라고 판정했다.**
+
+**`src/preprocessing/baseline.py` 수정:**
+- `SessionBaseline.fit`이 `concentration_delta`에서 베이스라인 표준편차
+  (축 0, `ddof=1`)도 함께 저장한다. 창이 1개뿐이면 ddof=1 표준편차가
+  0/0(NaN)이 되므로 0으로 시작해 `_SCALE_FLOOR`(1e-8) 클램프로 넘긴다.
+- `apply`의 `concentration_delta`가 `(x - reference) / scale`을 계산한다.
+  `y = gain·x + offset`일 때 `gain`이 분자·분모에서 상쇄된다(EEG의 dB
+  비율 정규화와 같은 원리로 맞춘 것).
+- `scale=None`(예: `fit`을 거치지 않고 `SessionBaseline(reference=..., kind=...)`
+  로 직접 구성하는 기존 결함 주입 훅)이면 옛 동작(뺄셈만)으로 폴백한다 —
+  Task 14의 `test_validation_session.py`가 이 경로를 이미 쓰고 있어서
+  깨뜨리지 않으려 했다.
+- `tests/preprocessing/test_baseline.py`: 기존 `concentration_delta` 테스트의
+  기댓값을 새 공식으로 갱신(단언은 약화하지 않음)하고, 이득 소거를 직접
+  검증하는 테스트(같은 신호에 다른 gain을 걸어도 결과가 같아야 함)와
+  σ≈0/n=1 경계 테스트를 추가했다. 17개 전부 PASS.
+
+**T2·T3 재측정 (session_recovery.yaml, seed 42):**
+
+| | 정정 전 | 정정 후 |
+|---|---|---|
+| cross_session · off | 0.4126 (불변 — off는 정규화 미사용) | 0.4126 |
+| cross_session · on | 0.4742 | **0.5090** |
+| within_subject | 0.8583 | 0.8583 |
+| **T3 회복률** | 0.268 | **0.335** (여전히 <0.5) |
+
+T2는 정규화 *off* 조건이라 §6.2 변경의 영향을 받지 않고 그대로 PASS
+(off의 fold_ci=[0.150,0.675]가 chance 0.3333을 포함). 확인만 하고 손대지
+않았다.
+
+**드리프트 시그마 8배를 되돌릴 수 있는지 확인 → 되돌릴 수 없었다.**
+원안 시그마(1x)로 off를 재실행하면 pooled=0.5532로 여전히 chance를 넘는다
+— off는 정규화를 쓰지 않으므로 §6.2 정정과 무관하게 그대로다. 8배 유지.
+
+**T3는 개선됐지만 여전히 미달이다. 임계를 낮추지 않고 다시 원인을
+분해했다:**
+1. 드리프트를 전부 0으로 둔 "청정" cross_session 조건도 pooled=0.5112
+   (회복률 0.339)로 8배-시그마 on(0.5090, 0.335)과 **거의 같다** — 잔여
+   격차가 주입 드리프트의 크기와 거의 무관하다는 뜻.
+2. 세션 내 드리프트만 0으로 둬도(다른 드리프트는 8배 유지) on=0.511,
+   회복률 0.338로 차이가 없다.
+3. 결론: 남은 격차의 대부분은 `cross_session`(fold 3개, leave-one-
+   session-out)과 `within_subject`(같은 세션 내 블록 분할)의 **구조적
+   난이도 차이**다 — 정규화로 메울 수 있는 성질이 아니다.
+
+**T1 주입 2를 다시 손봐야 했다.** 곱셈 이득 기반 주입(`hbo *= 1+k·load`)이
+바로 이번 정정이 상쇄하는 대상이 되어, 계수를 30→150까지 올려도 fold_ci를
+못 깼다(0.29대에 고정). 베이스라인 구간에는 나타나지 않고 과제 블록에서만
+부하에 비례하는 **덧셈 오프셋**(`hbo += k·load`, k=0.05)으로 바꿔 다시
+명확히 깨지게 했다(fold_ci_low=0.639) — 시작 베이스라인만 보는 정규화는
+이런 블록별 오프셋을 원리적으로 못 잡는다(§3.8).
+
+**최종: 7개 중 6개 PASS, T3만 실패(회복률 0.335 < 0.5).** 임계를 낮추지
+않고 미달로 재보고한다. §6.2는 고쳤고 남은 미달은 분할 방식 간 구조적
+난이도 차이로 보이므로, 추가 조치(T3 임계 재검토, 파일럿 규모 확대 등)는
+컨트롤러 판단에 맡긴다.
+
+상세: `docs/specs/2026-08-19-session-baseline-design.md` §6.2·§8.4.1,
+`.superpowers/sdd/2026-08-19-session-baseline/task-14-report.md`.
