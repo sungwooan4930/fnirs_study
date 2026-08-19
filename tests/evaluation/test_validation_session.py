@@ -632,60 +632,105 @@ def _qualities_by_session():
     return by_session
 
 
-#: T6의 변별 요구 (2026-08-19 컨트롤러 정정 — 스펙 §8.3의 원안이 요구하던
-#: "개별 녹화의 완전 분리"는 개념이 요구하는 것보다 엄격했다. drift_flag는
-#: (피험자, 세션)마다 붙고 드리프트 크기는 피험자마다 다르므로, 핵심 음성
-#: 칸의 *모든* 피험자가 양성 칸의 *모든* 피험자보다 낮을 것을 요구하면
-#: n을 아무리 키워도 분포의 꼬리에서 실패한다. §8.3이 실제로 묻는 것은
-#: 민감도·특이도이므로 비율로 판정한다. 관측에서 역산한 값이 아니라 3:1
-#: 변별을 요구하는 사전 선언이다 — 핵심 음성 칸(①② 큼·③ 작음)에서 경고가
-#: 남발되면 아무도 안 보게 되므로 낮아야 하고, ③이 큰 칸에서는 실제로
-#: 잡아야 한다.
-T6_NEGATIVE_FLAG_RATE_MAX = 0.25
-T6_POSITIVE_FLAG_RATE_MIN = 0.75
+_NEWLINE = chr(10)
+
+
+def _cell_diagnostic(by_session: dict) -> str:
+    """네 칸의 플래그 목록·실측 드리프트 값을 진단용으로 펼친다.
+
+    실패 메시지가 "PASS/FAIL"만 말하면 다음 사람이 다시 build_dataset을
+    돌려야 원인을 본다 — 어떤 (피험자, 세션)이 왜 걸렸는지 실패 메시지
+    자체에 남긴다. (개행은 chr(10)로 조립한다 — 이 저장소의 편집 파이프라인이
+    문자열 리터럴 안의 백슬래시-n 이스케이프를 실제 개행으로 뭉개는 문제가
+    있어, 이스케이프 시퀀스 대신 함수 호출로 우회한다.)
+    """
+    lines = []
+    for s in sorted(by_session):
+        for q in by_session[s]:
+            vals = ", ".join(
+                f"{m}={v:.4f}" for m, v in sorted(q.drift_by_modality.items())
+            )
+            lines.append(f"  세션{s} {q.subject_id}: flag={q.drift_flag} ({vals})")
+    return _NEWLINE.join(lines)
 
 
 @pytest.mark.slow
 def test_t6_flags_only_the_sessions_with_within_session_drift():
-    """2×2 배치 (스펙 §8.3, 판정은 비율 — 2026-08-19 컨트롤러 정정).
+    """2×2 배치 (스펙 §8.3 원안 — 개별 녹화 완전 분리).
 
-    세션 0: ①② 작음 · ③ 작음  → 플래그 비율 ≤ T6_NEGATIVE_FLAG_RATE_MAX
-    세션 1: ①② 작음 · ③ 큼    → 플래그 비율 ≥ T6_POSITIVE_FLAG_RATE_MIN
-    세션 2: ①② 큼   · ③ 작음  → 플래그 비율 ≤ T6_NEGATIVE_FLAG_RATE_MAX  ← 핵심 음성 칸
-    세션 3: ①② 큼   · ③ 큼    → 플래그 비율 ≥ T6_POSITIVE_FLAG_RATE_MIN
+    세션 0: ①② 작음 · ③ 작음  → 플래그 ✗ (전원)
+    세션 1: ①② 작음 · ③ 큼    → 플래그 ✓ (전원)
+    세션 2: ①② 큼   · ③ 작음  → 플래그 ✗ (전원)  ← 핵심 음성 칸
+    세션 3: ①② 큼   · ③ 큼    → 플래그 ✓ (전원)
+
+    **비율 판정으로 완화했다가 되돌렸다(2026-08-19, 컨트롤러 2차 정정).**
+    리뷰가 baseline_duration_s=20에서 세 시드로 재측정해 세션2의 오탐이
+    시드마다 0.125~0.375로 흔들리는 것을 잡아냈다 — 원인은 표본 수가 아니라
+    베이스라인 창 수였다(§6.3 분모를 std(ddof=1)로 바꾼 판정 A의 대가:
+    창이 적으면 SD 추정 자체가 불안정해 48채널 fnirs가 그 잡음을 그대로
+    받는다). `baseline_duration_s`를 20→60으로 늘리면(다른 config는 이미
+    60) 세 시드(42·7·2026) 전부 완전 분리로 돌아온다 — 표본을 8명으로
+    유지한 채로도, 아니 오히려 표본이 많을수록 완전 분리가 더 엄격한
+    시험이 되므로 이 결과가 더 설득력 있다. 판정 기준을 낮춘 것이
+    아니라 측정 아티팩트(짧은 베이스라인)를 고친 것이다.
     """
     by_session = _qualities_by_session()
-    rate = {
-        s: sum(q.drift_flag for q in qs) / len(qs) for s, qs in by_session.items()
-    }
-    summary = ", ".join(f"세션{s}={rate[s]:.3f}" for s in sorted(rate))
+    flagged = {s: [q.drift_flag for q in qs] for s, qs in by_session.items()}
+    diag = _cell_diagnostic(by_session)
 
-    assert rate[0] <= T6_NEGATIVE_FLAG_RATE_MAX, (
-        f"세션 0(드리프트 없음)의 플래그 비율 {rate[0]:.3f}이 "
-        f"{T6_NEGATIVE_FLAG_RATE_MAX}를 넘었다 — 오탐 과다. 네 칸 실측: {summary}"
+    assert not any(flagged[0]), (
+        "세션 0(①②·③ 모두 작음)이 플래그됐다 — 오탐." + _NEWLINE + diag
     )
-    assert rate[1] >= T6_POSITIVE_FLAG_RATE_MIN, (
-        f"세션 1(세션 내 드리프트 큼)의 플래그 비율 {rate[1]:.3f}이 "
-        f"{T6_POSITIVE_FLAG_RATE_MIN} 미만이다 — 미탐 과다. 네 칸 실측: {summary}"
+    assert all(flagged[1]), (
+        "세션 1(①② 작음·③ 큼)이 전원 플래그되지 않았다 — 미탐." + _NEWLINE + diag
     )
-    assert rate[2] <= T6_NEGATIVE_FLAG_RATE_MAX, (
-        f"세션 2(핵심 음성 칸)의 플래그 비율 {rate[2]:.3f}이 "
-        f"{T6_NEGATIVE_FLAG_RATE_MAX}를 넘었다. ①② 세션 간 드리프트는 정규화가 "
-        f"이미 처리하므로 플래그 사유가 아니다 — drift_flag가 세션 간 드리프트를 "
-        f"세션 내 드리프트로 오독하고 있다는 뜻이다. 네 칸 실측: {summary}"
+    assert not any(flagged[2]), (
+        "세션 2(①② 큼·③ 작음)가 플래그됐다 — 이 칸이 스펙 §8.3의 핵심 "
+        "음성 칸이다. ①② 세션 간 드리프트는 정규화(§6.2)가 이미 처리하므로 "
+        "그 자체는 플래그 사유가 아니다 — 여기가 플래그되면 drift_flag가 "
+        "세션 간 드리프트(①②)를 세션 내 드리프트(③)로 오독하고 있다는 "
+        "뜻이다." + _NEWLINE + diag
     )
-    assert rate[3] >= T6_POSITIVE_FLAG_RATE_MIN, (
-        f"세션 3(세션 내 드리프트 큼)의 플래그 비율 {rate[3]:.3f}이 "
-        f"{T6_POSITIVE_FLAG_RATE_MIN} 미만이다 — 미탐 과다. 네 칸 실측: {summary}"
+    assert all(flagged[3]), (
+        "세션 3(①②·③ 모두 큼)이 전원 플래그되지 않았다 — 미탐." + _NEWLINE + diag
     )
 
 
 @pytest.mark.slow
-def test_t6_injection_zero_threshold_destroys_specificity():
-    """결함 주입: 임계를 0으로 낮추면 전부 플래그되어 특이도가 무너져야 한다."""
+def test_t6_injection_blind_to_end_baseline_misses_the_positive_cells(monkeypatch):
+    """결함 주입: compute_drift가 종료 베이스라인을 보지 못하게 만들면(=③ 세션
+    내 드리프트에 완전히 둔감해지면), 양성 칸(세션 1·3)이 무너져야 한다.
+
+    2026-08-19 컨트롤러 정정. 이전 버전(임계를 0으로 낮추는 주입)은 드리프트가
+    정확히 0이 아닌 한 무조건 플래그되므로 거의 항진명제였다 — 검증하는 것은
+    "임계가 config에서 읽힌다"뿐, §6.3이 실제로 측정해야 하는 대상(시작↔종료
+    차이)의 민감도가 아니었다.
+
+    이 주입은 `compute_drift`에 종료 베이스라인 대신 시작 베이스라인 자기
+    자신을 넘긴다 — `|end-start|`가 항상 0이 되어 어떤 세션 내 드리프트도
+    검출하지 못한다. 정상이라면 100% 플래그되는 세션 1·3이 이 주입 아래서는
+    한 건도 플래그되지 않아야, 그것이 실제로 §6.3의 판별력을 시험한 것이다.
+    """
+    from src.preprocessing.baseline import compute_drift as real_compute_drift
+
+    def _blind_to_end_baseline(start_baseline, end_baseline, *, zero_atol):
+        return real_compute_drift(start_baseline, start_baseline, zero_atol=zero_atol)
+
+    monkeypatch.setattr(runner_mod, "compute_drift", _blind_to_end_baseline)
+
     cfg = load_config(QUALITY)
-    cfg = _deep_update(cfg, {"preprocessing": {"baseline": {"drift_threshold_relative": 0.0}}})
-    validate_config(cfg)
     rng = set_all_seeds(int(cfg["seed"]))
     _, _, qualities = runner_mod.build_dataset(cfg, rng)
-    assert all(q.drift_flag for q in qualities)
+    by_session: dict[int, list] = defaultdict(list)
+    for q in qualities:
+        by_session[q.session_idx].append(q)
+
+    assert not any(q.drift_flag for q in by_session[1]), (
+        "종료 베이스라인을 못 보게 만들었는데도 세션 1(세션 내 드리프트 큼)이 "
+        "여전히 플래그됐다 — 주입이 효과가 없다. 이 가드가 실제로 무엇을 "
+        "재는지 알 수 없다는 뜻이다."
+    )
+    assert not any(q.drift_flag for q in by_session[3]), (
+        "종료 베이스라인을 못 보게 만들었는데도 세션 3(세션 내 드리프트 큼)이 "
+        "여전히 플래그됐다 — 주입이 효과가 없다."
+    )

@@ -1,10 +1,16 @@
 # T5·T6 전용. T6은 2×2 배치(assignment: fixed_2x2)로 세션 간(①②)·세션
 # 내(③) 드리프트를 독립으로 켜고 끄기 위해 세션 4개가 필요하다.
 # session_recovery.yaml(T2·T3용, assignment: sampled)을 베이스로 하되
-# n_subjects·n_sessions·drift 블록만 바꿨다.
-# n_subjects: 4 -> 8 (2026-08-19, 컨트롤러 지시). T6 판정을 "개별 녹화 완전
-# 분리"에서 "칸별 플래그 비율"로 바꾼 뒤(테스트 파일 참조) n=4에서는 비율이
-# 0/0.25/0.5/0.75/1.0 다섯 값만 가능해 추정이 거칠었다. 8이면 더 세분된다.
+# n_subjects·n_sessions·drift·task.baseline_duration_s 블록만 바꿨다.
+# n_subjects: 4 -> 8 (2026-08-19). 되돌릴 이유가 없다 — 표본이 많을수록
+# T6의 완전 분리 요구(네 칸 전원 일치)가 더 엄격한 시험이 된다.
+# task.baseline_duration_s: 20 -> 60 (2026-08-19, 리뷰가 발견 + 컨트롤러
+# 3차 판정). 20초는 5초창·1초스텝에서 베이스라인 창을 약 16개만 준다 —
+# compute_drift의 분모(std(ddof=1), Task 16 §6.3 수정)가 그 정도 창
+# 수에서는 불안정해 48채널 fnirs가 잡음을 그대로 받는다(세 시드 재현:
+# 20초에서는 세션0·2의 오탐 비율이 0.125~0.500으로 시드마다 흔들림).
+# 60초(창 ~56개)로 늘리면 세 시드(42·7·2026) 전부 완전 분리로 돌아온다.
+# task-16-report.md·spec §8.4.1 "정정 8" 참조.
 run_name: session_quality
 seed: 42
 
@@ -17,7 +23,7 @@ simulation:
   task:
     nback_levels: [0, 2, 3]
     block_duration_s: 30
-    baseline_duration_s: 20
+    baseline_duration_s: 60
     n_blocks_per_level: 2
     stim_interval_s: 2.0
   practice:
@@ -50,12 +56,11 @@ preprocessing:
     # 아니었다. 2.15는 project-wide 값이다(컨트롤러 지시로 smoke·null·
     # pilot·session_recovery·session_clean·session_quality 전부 동일하게
     # 맞춤 — 지표가 스케일 자유이므로 config별로 다를 이유가 없다). 유도:
-    # 4피험자×4세션 실측에서 eeg 작은 군 최댓값 0.788948·큰 군 최솟값
-    # 3.515019의 중간값 (0.788948+3.515019)/2 = 2.151984 ≈ 2.15.
-    # 8피험자로 늘린 뒤 T6(비율 판정)을 이 임계로 재확인한 결과: 세션
-    # 0=0.250·1=1.000·2(핵심 칸)=0.125·3=1.000 — 전부 T6_NEGATIVE_FLAG_
-    # RATE_MAX(0.25)·T6_POSITIVE_FLAG_RATE_MIN(0.75) 안. task-16-report.md
-    # 참조.
+    # eeg 작은 군 최댓값·큰 군 최솟값의 중간값 ≈ 2.15.
+    # baseline_duration_s=60·n_subjects=8로 T6(완전 분리 판정)을 재확인한
+    # 결과(세 시드 42·7·2026 전부): 세션0·2(핵심 칸)는 8명 전원 비플래그,
+    # 세션1·3은 8명 전원 플래그 — eeg·fnirs 둘 다 분리에 기여한다.
+    # task-16-report.md·spec §8.4.1 "정정 8" 참조.
     drift_threshold_relative: 2.15
     zero_atol: 1.0e-8
 
