@@ -225,6 +225,7 @@ D:/Study_fNIRS/
 │   ├── plan/                    # 연구계획서 원본·추출본
 │   ├── protocol/                # 실험 프로토콜, IRB 문서
 │   ├── specs/                   # 설계 스펙 (superpowers)
+│   ├── design/                  # UI·시각화 참고자료 (목표 4)
 │   ├── plans/                   # 구현 계획 (superpowers)
 │   └── legacy/                  # 폐기된 4ch 프로젝트 문서
 ├── src/
@@ -273,6 +274,8 @@ D:/Study_fNIRS/
    → 합성 데이터에서는 몽타주를 설정 주입 가능하게 만든다.
 4. **"3수준 분류"의 정의** — 인지부하 저/중/고인지, 6차원 각각인지.
 5. **대시보드 스택** — React+FastAPI(WebSocket) vs Streamlit/Dash. 목표 4 착수 시 결정.
+   → 미감 참고자료: `docs/design/2026-08-19-dashboard-ui-reference.md`
+   (무채색 Swiss 계열. **미감만 참고. 정보 구조는 1차원 지표 기반이라 §10 위반** — 그대로 옮기지 말 것)
 6. `.claude/launch.json`이 폐기된 `web/`·Qt 앱을 참조 중 — 대시보드 스택 확정 후 갱신.
 
 ---
