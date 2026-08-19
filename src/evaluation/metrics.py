@@ -1,8 +1,14 @@
 """지표 집계.
 
 CLAUDE.md 5.4가 요구하는 대로 chance level과 CV 방식을 항상 함께 담고,
-평균만이 아니라 최악 피험자 성능도 담는다. 평균만 보고하면 특정 피험자에서
+평균만이 아니라 최악 fold 성능도 담는다. 평균만 보고하면 특정 fold에서
 완전히 실패하는 모델이 좋아 보인다.
+
+**주의: `accuracy_worst`·`worst_fold_subjects`가 가리키는 단위는 `cv_method`마다
+다르다** (아래 `aggregate()`의 `fold_ci_*` 설명과 같은 이유). `loso`에서는 fold가
+피험자이므로 "최악 피험자"가 맞지만, `cross_session`에서는 fold가 **세션**이라
+`accuracy_worst`는 최악 **세션**이고 `worst_fold_subjects`는 그 세션에 낀 피험자
+전원(보통 여러 명)을 나열한다 — "최악 피험자 1명"으로 읽지 마라.
 """
 
 from __future__ import annotations
@@ -44,6 +50,13 @@ def aggregate(fold_results, *, n_classes: int, cv_method: str) -> dict:
         fold끼리 **서로 상관돼 있다.** 이 구간은 진짜 불확실성보다 좁게 나올
         수 있으므로 **하한으로만** 읽어야 하며, `loso`의 `fold_ci`와 나란히
         비교하면 안 된다.
+
+    `accuracy_worst`·`worst_fold_subjects`도 같은 이유로 스킴별 해석이 다르다
+    — fold가 가리키는 단위가 `cv_method`마다 다르므로 "최악의 무엇"인지가
+    함께 바뀐다. `loso`는 최악 피험자, `cross_session`은 최악 세션(그리고
+    `worst_fold_subjects`는 그 세션의 피험자 전원), `within_subject`는 최악
+    (피험자 × 블록)이다. 스킴이 다른 두 실행의 `accuracy_worst`를 "같은 종류의
+    최악값"으로 나란히 놓지 마라.
     """
     if not fold_results:
         raise ValueError("no folds to aggregate")
