@@ -14,6 +14,7 @@ SIM_CFG = {
     "task": {
         "nback_levels": [0, 2, 3],
         "block_duration_s": 30,
+        "baseline_duration_s": 20,
         "n_blocks_per_level": 2,
         "stim_interval_s": 2.0,
     },

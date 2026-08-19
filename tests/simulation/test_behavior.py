@@ -9,6 +9,7 @@ from src.simulation.subject import make_subjects
 TASK_CFG = {
     "nback_levels": [0, 2, 3],
     "block_duration_s": 30,
+    "baseline_duration_s": 20,
     "n_blocks_per_level": 2,
     "stim_interval_s": 2.0,
 }
@@ -117,6 +118,7 @@ def test_accuracy_drops_with_lagged_load_short_blocks():
     short_block_cfg = {
         "nback_levels": [0, 2, 3],
         "block_duration_s": 3.0,      # 짧은 블록
+        "baseline_duration_s": 5.0,
         "n_blocks_per_level": 4,      # 더 많은 블록 → 더 많은 경계 전환
         "stim_interval_s": 0.5,       # 자극 더 촘촘히
     }
