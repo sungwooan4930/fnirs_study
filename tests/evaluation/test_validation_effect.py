@@ -20,21 +20,21 @@ def _metrics(config, tmp_path, **overrides):
 def test_t1_null_effect_stays_at_chance(tmp_path):
     m = _metrics("config/experiments/null.yaml", tmp_path)
     assert m["cv_method"] == "loso"
-    # 널 판정은 subject_ci(fold 수준 t-구간)로 한다. pooled_ci는 5초창·1초
-    # 스텝의 80% 오버랩 때문에 창을 독립 시행으로 취급해 불확실성을
+    # 널 판정은 fold_ci(LOSO이므로 fold=피험자 수준 t-구간)로 한다. pooled_ci는
+    # 5초창·1초 스텝의 80% 오버랩 때문에 창을 독립 시행으로 취급해 불확실성을
     # 과소평가한다 — 세션이 늘어 창 수가 커질수록 더 위험해진다
     # (metrics.aggregate 문서 참조). 실패 메시지에 두 구간을 모두 적어
     # 다음 사람이 그 차이를 보게 한다.
-    assert m["subject_ci_low"] <= CHANCE <= m["subject_ci_high"], (
+    assert m["fold_ci_low"] <= CHANCE <= m["fold_ci_high"], (
         f"널 데이터인데 chance가 fold 수준 신뢰구간 밖이다 "
-        f"(subject_ci=[{m['subject_ci_low']:.3f}, {m['subject_ci_high']:.3f}], "
+        f"(fold_ci=[{m['fold_ci_low']:.3f}, {m['fold_ci_high']:.3f}], "
         f"pooled_ci=[{m['pooled_ci_low']:.3f}, {m['pooled_ci_high']:.3f}]) — "
         "파이프라인에 누수가 있다"
     )
     # binomtest_p는 삭제했다: pooled_ci와 같은 독립성 결함을 공유한다
     # (18000개 오버랩 창을 독립 베르누이 시행으로 세어 계산된 p값). 세션
     # 수·창 수가 늘수록 거짓 양성(널인데도 유의하다고 나옴)을 낸다. 널
-    # 판정은 위 subject_ci 하나로 충분하다.
+    # 판정은 위 fold_ci 하나로 충분하다.
 
 
 @pytest.mark.slow
@@ -48,10 +48,10 @@ def test_t1_null_holds_at_pilot_scale_too(tmp_path):
         "config/experiments/pilot.yaml", tmp_path,
         simulation={"effect_size": 0.0},
     )
-    # subject_ci를 쓰는 이유는 위 test_t1_null_effect_stays_at_chance와 같다.
-    assert m["subject_ci_low"] <= CHANCE <= m["subject_ci_high"], (
+    # fold_ci를 쓰는 이유는 위 test_t1_null_effect_stays_at_chance와 같다.
+    assert m["fold_ci_low"] <= CHANCE <= m["fold_ci_high"], (
         f"널 데이터인데 chance가 fold 수준 신뢰구간 밖이다 "
-        f"(subject_ci=[{m['subject_ci_low']:.3f}, {m['subject_ci_high']:.3f}], "
+        f"(fold_ci=[{m['fold_ci_low']:.3f}, {m['fold_ci_high']:.3f}], "
         f"pooled_ci=[{m['pooled_ci_low']:.3f}, {m['pooled_ci_high']:.3f}])"
     )
 
@@ -60,7 +60,16 @@ def test_t1_null_holds_at_pilot_scale_too(tmp_path):
 def test_t2_effect_is_recovered_above_chance(tmp_path):
     m = _metrics("config/experiments/pilot.yaml", tmp_path)
     assert m["pooled_accuracy"] > CHANCE
-    assert m["binomtest_p"] < 0.01, "심어둔 효과를 하네스가 회수하지 못했다"
+    # binomtest_p < 0.01은 예전 단언이었으나 T1에서 삭제한 것과 같은
+    # 독립성 결함을 공유한다 (18000개 오버랩 창을 독립 시행으로 세어 계산된
+    # p값 — 우연한 잡음도 유의하다고 착시시키는 방향으로 작동). 효과 회수는
+    # fold_ci(LOSO이므로 피험자 수준)로 판정한다 — chance가 구간 **밖**(위쪽)
+    # 이어야 진짜 효과다. 파일럿 실측: fold_ci_low ≈ 0.513으로 chance(0.333)를
+    # 여유 있게 넘는다.
+    assert m["fold_ci_low"] > CHANCE, (
+        f"fold_ci_low({m['fold_ci_low']:.3f})가 chance({CHANCE:.3f})를 넘지 "
+        "못했다 — 심어둔 효과를 하네스가 회수하지 못했다"
+    )
 
 
 @pytest.mark.slow

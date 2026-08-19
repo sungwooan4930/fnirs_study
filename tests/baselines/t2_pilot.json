@@ -3,5 +3,9 @@
   "accuracy_mean": 0.6283333333333333,
   "accuracy_worst": 0.31466666666666665,
   "chance_level": 0.3333333333333333,
-  "cv_method": "loso"
+  "cv_method": "loso",
+  "recorded_at": "2026-08-19",
+  "git_commit": "1bf95ed",
+  "config": "config/experiments/pilot.yaml",
+  "n_sessions": 3
 }

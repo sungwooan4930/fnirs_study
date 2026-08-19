@@ -21,20 +21,29 @@ def aggregate(fold_results, *, n_classes: int, cv_method: str) -> dict:
     약 √(N/(N−1))만큼 과소평가한다. 단일 fold(N=1)에서는 nan을 피하고
     0.0을 반환한다.
 
-    두 종류의 신뢰구간을 함께 담는다 — 서로 다른 것을 잰다.
+    두 종류의 신뢰구간과 하나의 p값을 함께 담는다 — 모두 같은 결함을 공유하는
+    쪽(`pooled_ci_*`, `binomtest_p`)과 그것을 피하는 쪽(`fold_ci_*`)으로 갈린다.
 
-    - `pooled_ci_*`: 모든 창을 독립 베르누이 시행으로 취급한 이항 신뢰구간
-      (n = 창 개수). **5초 창·1초 스텝은 80% 오버랩이므로 창은 독립이 아니다**
-      — 한 표본(피험자·구간)이 창 5개에 걸쳐 들어간다. 이 구간은 그 상관을
-      무시하므로 **불확실성을 체계적으로 과소평가**한다. 세션을 늘려 창
-      개수(n)가 커질수록 구간은 더 좁아지지만 실제 정보량은 그만큼 늘지
-      않으므로, n이 클수록 이 구간은 더 위험해진다 — 우연한 잡음을
-      "통계적으로 유의한 효과"로 착시시키는 방향으로 작동한다.
-    - `subject_ci_*`: fold(≈피험자) 정확도를 표본으로 삼은 t-신뢰구간
-      (자유도 = n_folds − 1). 오버랩 상관을 자동으로 피한다 — fold 하나는
-      창 개수와 무관하게 관측치 하나다. **분포(널 데이터가 chance를
-      포함하는지 등) 판정에는 이 구간을 쓴다.** `n_folds < 2`면 표준오차를
-      추정할 수 없으므로 구간을 지어내지 않고 `nan`을 둘 다 채운다.
+    - `pooled_ci_*`, `binomtest_p`: 모든 창을 독립 베르누이 시행으로 취급한
+      이항 신뢰구간·검정 (n = 창 개수). **5초 창·1초 스텝은 80% 오버랩이므로
+      창은 독립이 아니다** — 한 표본(피험자·구간)이 창 5개에 걸쳐 들어간다.
+      이 둘은 그 상관을 무시하므로 **불확실성을 체계적으로 과소평가**한다.
+      세션을 늘려 창 개수(n)가 커질수록 구간은 더 좁아지고 p값은 더 작아지지만
+      실제 정보량은 그만큼 늘지 않으므로, n이 클수록 둘 다 더 위험해진다 —
+      우연한 잡음을 "통계적으로 유의한 효과"로 착시시키는 방향으로 작동한다.
+      `binomtest_p`가 작다는 것을 효과의 증거로 쓰지 마라.
+    - `fold_ci_*`: fold 정확도를 표본으로 삼은 t-신뢰구간(자유도 = n_folds − 1).
+      오버랩 상관을 자동으로 피한다 — fold 하나는 창 개수와 무관하게 관측치
+      하나다. `n_folds < 2`면 표준오차를 추정할 수 없으므로 구간을 지어내지
+      않고 `nan`을 둘 다 채운다. **CV 스킴마다 fold가 가리키는 단위가 다르므로
+      해석도 다르다 — 스킴이 다른 실행끼리 같은 표에 넣지 마라 (CLAUDE.md §5.4).**
+      - `loso`: fold가 곧 피험자다. 이 구간이 **피험자 수준** 불확실성이다.
+      - `cross_session`: fold가 세션이다. 보통 세션 수가 적어 t 배수가 커지므로
+        이 구간은 **보수적**(넓게 잡힘)이다.
+      - `within_subject`: fold가 (피험자 × 세션 내 블록)이라 같은 피험자의
+        fold끼리 **서로 상관돼 있다.** 이 구간은 진짜 불확실성보다 좁게 나올
+        수 있으므로 **하한으로만** 읽어야 하며, `loso`의 `fold_ci`와 나란히
+        비교하면 안 된다.
     """
     if not fold_results:
         raise ValueError("no folds to aggregate")
@@ -60,17 +69,18 @@ def aggregate(fold_results, *, n_classes: int, cv_method: str) -> dict:
     else:
         accuracy_std = float(accuracies.std(ddof=1))
 
-    # subject_ci: fold(≈피험자) 수준 t-신뢰구간. 오버랩된 창을 표본으로
-    # 세지 않는다 — fold 하나가 관측치 하나다. n_folds < 2면 표준오차를
-    # 정의할 수 없으므로 구간을 지어내지 않고 nan을 둔다.
+    # fold_ci: fold 수준 t-신뢰구간. 오버랩된 창을 표본으로 세지 않는다 —
+    # fold 하나가 관측치 하나다. n_folds < 2면 표준오차를 정의할 수 없으므로
+    # 구간을 지어내지 않고 nan을 둔다. fold가 무엇을 가리키는지(피험자·세션·
+    # 피험자×블록)는 cv_method에 달렸다 — 위 docstring 참조.
     if n_folds < 2:
-        subject_ci_low = float("nan")
-        subject_ci_high = float("nan")
+        fold_ci_low = float("nan")
+        fold_ci_high = float("nan")
     else:
         sem = accuracies.std(ddof=1) / np.sqrt(n_folds)
         t_crit = float(stats.t.ppf(0.975, df=n_folds - 1))
-        subject_ci_low = float(accuracies.mean() - t_crit * sem)
-        subject_ci_high = float(accuracies.mean() + t_crit * sem)
+        fold_ci_low = float(accuracies.mean() - t_crit * sem)
+        fold_ci_high = float(accuracies.mean() + t_crit * sem)
 
     return {
         "cv_method": cv_method,
@@ -84,8 +94,8 @@ def aggregate(fold_results, *, n_classes: int, cv_method: str) -> dict:
         "pooled_accuracy": n_correct / n_total,
         "pooled_ci_low": float(ci.low),
         "pooled_ci_high": float(ci.high),
-        "subject_ci_low": subject_ci_low,
-        "subject_ci_high": subject_ci_high,
+        "fold_ci_low": fold_ci_low,
+        "fold_ci_high": fold_ci_high,
         "binomtest_p": float(test.pvalue),
         "confusion": confusion_matrix(
             y_true, y_pred, labels=list(range(n_classes))
