@@ -5,6 +5,7 @@ from src.datasets.features_minimal import extract_features
 from src.datasets.windowing import make_windows
 from src.simulation.recording import generate_recording
 from src.simulation.session import SessionDriftParams, SessionPlan
+from src.simulation.state import TASK
 from src.simulation.subject import make_subjects
 
 SIM_CFG = {
@@ -118,6 +119,7 @@ def test_behavior_features_zero_when_no_stimulus_in_window():
         end_s=np.array([5.0]),
         trial_id=np.array([0]),
         load_level=np.array([0]),
+        block_kind=np.array([TASK]),
     )
 
     feats = extract_features(rec, win)
@@ -163,6 +165,7 @@ def test_fnirs_hbo_slope_matches_linear_ramp():
         end_s=np.array([5.0]),
         trial_id=np.array([0]),
         load_level=np.array([0]),
+        block_kind=np.array([TASK]),
     )
 
     feats = extract_features(rec, win)
