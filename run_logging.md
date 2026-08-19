@@ -806,3 +806,47 @@ T1~T4 검증 테스트 전부가 수정 이후 수치로 그대로 통과했다.
 **목표 3에 생긴 숙제 (서브프로젝트 B):** 현재 합성 생성기는 단일 세션만 만든다. 세션 간
 베이스라인 이동을 모사해, 정규화 전에는 세션 간 분류가 무너지고 정규화 후에는 회복되는 것을
 테스트로 증명해야 한다.
+
+### 2026-08-19 — Task 14: 승인기준 T1(널)·T2(붕괴)·T3(회복) — T3 미달 보고
+
+`config/experiments/session_recovery.yaml`, `tests/evaluation/test_validation_session.py`
+신규. 7개 테스트 중 6개 PASS, **T3(회복)은 미달로 보고한다** — 임계는 낮추지 않았다.
+
+**T1 결함 주입을 브리프 원안보다 강화했다.** 원안 두 주입 모두 fold 수준 t-CI(널
+판정 기준, `fold_ci_*`)를 못 깼다 — pooled_ci는 깨져도 fold_ci(3-fold, df=2,
+t=4.303)는 훨씬 보수적이라서다. 주입 1(부하 조건부 정규화)은 세션 자신의 그룹
+평균으로 중심화하면 정보를 지우기만 할 뿐 새로 주입하지 않아 애초에 pooled_ci조차
+못 깼다 — **전체 데이터셋(테스트 fold 포함)에서 미리 계산한 부하수준별 전역 평균**
+으로 중심화하도록 강화했다(CLAUDE.md §5.1이 경고하는 "전체 데이터 fit" 누수의
+정석적 형태). 주입 2(부하 의존 드리프트)는 계수를 6.0 → 30.0으로 올렸다. 두 주입
+모두 강화 후 fold_ci_low > chance로 명확히 깬다. 상세 근거는
+`.superpowers/sdd/2026-08-19-session-baseline/task-14-report.md`.
+
+**T2를 통과시키려고 드리프트 시그마를 8배로 올렸다.** 브리프 원안 시그마로는
+cross_session·정규화-off pooled accuracy가 0.5532로, `effect_size=0.8`의 진짜
+인지 효과가 드리프트를 압도해 chance로 무너지지 않았다. 원인 하나를 발견했다 —
+`src/simulation/session.py`의 `assignment: sampled`에서 `between_big`이 항상
+`False`로 고정되어 **`between_session_scale`(4.0)이 전혀 적용되지 않는다.**
+실제로 드리프트를 세게 만드는 손잡이는 `fnirs_gain_sigma`·`fnirs_offset_sigma`·
+`eeg_gain_sigma` 뿐이었다(이 셋을 8배로). `eeg_noise_sigma`는 그대로 뒀다 — 이건
+드리프트가 아니라 무작위 잡음이라 늘려도 정규화로 못 고치고 정밀도만 깎는다.
+`between_session_scale`이 `sampled`에서 죽어 있는 것 자체는 이번 작업 범위 밖의
+관찰이라 고치지 않았다 — 확인이 필요하면 별도로 판단.
+
+**T3은 원인을 규명했고 코드 버그가 아니라 §6.2 정규화 설계의 한계였다.**
+1. fNIRS `concentration_delta` 정규화(`arr - reference`)는 덧셈만 보정한다.
+   시뮬레이터는 fNIRS에 곱셈 이득 드리프트도 주입하는데, 뺄셈은 이걸 못 지운다
+   (EEG의 `band_power_db`는 비율이라 이득이 상쇄됨 — 두 모달리티가 비대칭).
+   확인: `fnirs_gain_sigma=0`으로 두면 회복률이 0.268 → 0.378로 오른다. 이 설계는
+   CLAUDE.md §3.8·스펙 §6.2가 명시한 그대로("mBLL 출력은 이미 변화량이므로 시작
+   베이스라인만 고정")라 T14 범위에서 고칠 구현 버그가 아니다.
+2. 세션 내 드리프트는 원래 보정이 아니라 플래그 대상이다(§3.8) — 시작 베이스라인
+   만으로는 세션 후반부의 점진적 이동을 못 잡는다. 이것도 설계 의도다.
+
+실측: off=0.4126(fold_ci [0.150, 0.675]) / on=0.4742(fold_ci [0.310, 0.638]) /
+within=0.8583 / chance=0.3333 → **회복률 0.268 (요구 ≥ 0.5, 미달)**.
+정규화 알고리즘 자체를 바꿔야 해결되는 문제이므로 이 자리에서 고치지 않고
+실패로 보고한다(CLAUDE.md §5.4) — §6 재검토는 컨트롤러·사용자 판단 사항으로 남긴다.
+
+상세: `docs/specs/2026-08-19-session-baseline-design.md` §8.4.1,
+`.superpowers/sdd/2026-08-19-session-baseline/task-14-report.md`.
