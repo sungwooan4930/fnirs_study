@@ -360,6 +360,19 @@ T4_LEVEL = 2
 T4_RATIO_MIN = 0.5
 T4_RATIO_MAX = 1.5
 
+#: b_ref 자체가 살아 있는지 확인하는 절대 하한. 단위는 "베이스라인 산포 대비
+#: 배수"(§6.2 정정 후 concentration_delta의 단위)다. 리뷰(2026-08-19)가 실증한
+#: 구멍: b_ref·b_hat 둘 다 같은 정규화를 거치므로, 정규화가 **양쪽 모두에서**
+#: 연습 효과를 죽이면 비율은 잡음/잡음이 되어 우연히 [0.5, 1.5] 안에 떨어질 수
+#: 있다 — `abs(b_ref) > 1e-9`는 죽은 값(관측 0.0005~0.017)보다 6~7자릿수 낮아
+#: 전혀 못 막는다. `T4_REF_SLOPE_MIN`은 b_ref 자신이 "기준 노릇을 할 만큼
+#: 살아있는지"를 먼저 검사한다.
+#: 관측(살아있는 b_ref 1.995~3.674 / 양쪽 다 죽인 b_ref 0.0005~0.017, 여러
+#: 시드)은 이 선언이 타당한지 **확인**하는 용도이지 값의 출처가 아니다 — 하한은
+#: 최소 관측 생존값(1.995)의 1/4이고, 관측된 죽은 값의 최댓값(0.017)의 30배
+#: 이상이다.
+T4_REF_SLOPE_MIN = 0.5
+
 
 def _practice_slope(config_path, *, normalize, normalizer=SessionBaseline):
     """세션 번호에 대한 fNIRS HbO 평균 특징의 기울기.
@@ -398,6 +411,49 @@ def _practice_slope(config_path, *, normalize, normalizer=SessionBaseline):
     return float(np.polyfit(xs, ys, 1)[0])
 
 
+class _ZScoreBaseline(SessionBaseline):
+    """결함 주입: 분모를 베이스라인 블록이 아니라 세션 전체(과제 포함)의 산포로
+    바꾼다. `fit`은 베이스라인 창만 받아 평균만 저장하고(산포 저장 안 함),
+    `apply`는 자신에게 넘어온 배열(`_practice_slope`가 세션 전체 `feats`를
+    넘긴다) 자체의 표준편차로 나눈다 — 분모가 처음부터 "세션 전체 산포"다.
+
+    두 T4 결함 주입 테스트가 공유하므로 모듈 스코프로 뺐다.
+    """
+
+    @classmethod
+    def fit(cls, start_baseline, kind):
+        return cls(reference=np.asarray(start_baseline).mean(axis=0), kind=kind)
+
+    def apply(self, x):
+        arr = np.asarray(x, dtype=float)
+        sd = arr.std(axis=0)
+        sd[sd == 0] = 1.0
+        return (arr - arr.mean(axis=0)) / sd
+
+
+def _assert_ratio_valid(b_ref, b_hat, *, context=""):
+    """T4 판정 로직.
+
+    **`abs(b_ref) > 1e-9`가 아니라 `T4_REF_SLOPE_MIN`으로 b_ref 생존을 검사한다**
+    (2026-08-19 리뷰 Critical 수정). `1e-9`는 "0으로 나누기만 막는" 수치적
+    하한이라 죽은 b_ref(관측 0.0005~0.017)를 전혀 못 거른다 — 그 상태에서
+    비율만 보면 잡음/잡음이 우연히 [0.5, 1.5] 안에 떨어져 정규화가 연습 효과를
+    통째로 지운 경우조차 통과할 수 있다(`test_t4_injection_symmetric_kill_
+    is_caught_by_ref_floor` 참조). 반드시 b_ref 생존 검사가 비율 검사보다
+    먼저다 — 비율은 분모가 의미 있을 때만 의미가 있다.
+    """
+    assert abs(b_ref) >= T4_REF_SLOPE_MIN, (
+        f"{context}기준 실행 자체에서 연습 효과가 사라졌다 — 비율을 계산할 근거가 "
+        f"없다. |b_ref|={abs(b_ref):.6f} < 하한 {T4_REF_SLOPE_MIN}"
+    )
+    ratio = b_hat / b_ref
+    assert T4_RATIO_MIN <= ratio <= T4_RATIO_MAX, (
+        f"{context}기울기 보존율 {ratio:.3f} 가 [{T4_RATIO_MIN}, {T4_RATIO_MAX}] "
+        f"밖이다. b_ref={b_ref:.4f} b_hat={b_hat:.4f}."
+    )
+    return ratio
+
+
 @pytest.mark.slow
 def test_t4_practice_effect_survives_normalization(tmp_path):
     """정규화가 측정 드리프트를 지우면서 진짜 학습은 남겨야 한다.
@@ -418,20 +474,20 @@ def test_t4_practice_effect_survives_normalization(tmp_path):
     §8.2 "2026-08-19 참고" 문단이 이미 이 원칙—"같은 파이프라인, 드리프트만
     다르다"—을 예고했다). 이러면 `b_ref`·`b_hat` 둘 다 "베이스라인 산포
     대비 배수" 단위로 맞춰져 비율이 다시 의미를 가진다.
+
+    **분해로 확인한 원인(리뷰 2026-08-19):** 1.294의 29%p 초과분은 σ̂ 추정
+    잡음이 아니라 **세션 내 드리프트 잔여물**이다. `within_session_rate=0`으로
+    override하면 보존율이 정확히 1.000000이 된다 — 시작 베이스라인 정규화는
+    곱셈 이득·가산 오프셋(①②)은 완전히 소거하지만, 세션 *내* 드리프트(③)는
+    구조적으로 못 지운다(CLAUDE.md §3.8: ③은 정규화가 아니라 플래그 대상).
+    seed 42/0/1/7의 보존율은 1.294/0.843/0.932/1.274로 1 부근에 분산돼 있고
+    전부 [0.5, 1.5] 안이다 — 지배 요인은 24개 피험자-세션에 대한 거친
+    베르누이 배정(`within_big = u < within_session_fraction`)이지 매끄러운
+    잡음이 아니다.
     """
     b_ref = _practice_slope(CLEAN, normalize=True)
     b_hat = _practice_slope(RECOVERY, normalize=True)
-
-    assert abs(b_ref) > 1e-9, (
-        "기준 실행에서 연습 효과 기울기가 0이다 — practice.rate가 특징에 "
-        "도달하지 않았다는 뜻이므로 보존율을 정의할 수 없다"
-    )
-    ratio = b_hat / b_ref
-    assert T4_RATIO_MIN <= ratio <= T4_RATIO_MAX, (
-        f"기울기 보존율 {ratio:.3f} 가 [{T4_RATIO_MIN}, {T4_RATIO_MAX}] 밖이다. "
-        f"b_ref={b_ref:.4f} b_hat={b_hat:.4f}. 낮으면 정규화가 진짜 인지 변화까지 "
-        "지웠다는 뜻이고, 높으면 없던 변화를 만들어냈다는 뜻이다 — 둘 다 실패다."
-    )
+    _assert_ratio_valid(b_ref, b_hat)
 
 
 @pytest.mark.slow
@@ -439,11 +495,7 @@ def test_t4_injection_over_normalization_kills_the_practice_effect():
     """결함 주입: 분모를 베이스라인 블록이 아니라 세션 전체(과제 포함)의 산포로 바꾼다.
 
     **브리프 원안(세션별 전체 z-score)을 재설계 없이 그대로 썼다** — 검토해보니
-    이미 요점을 구현하고 있었다. `_practice_slope`는 `normalizer.fit(feats[start],
-    ...)`로 베이스라인 창만 넘겨 fit하지만, 그 뒤 `.apply(feats)`는 **세션 전체
-    (베이스라인+과제) 특징 행렬**을 넘긴다. 아래 `_ZScoreBaseline.apply`는 인자로
-    받은 `arr`(=세션 전체)의 표준편차로 나누므로, 분모가 처음부터 "세션 전체
-    산포"이지 "베이스라인 블록 산포"가 아니다 — 요청된 결함 그대로다. 바뀐 것은
+    이미 요점을 구현하고 있었다(`_ZScoreBaseline` docstring 참조). 바뀐 것은
     비교 기준(`b_ref`)뿐이다: 위 테스트와 같은 이유로 `normalize=True`(드리프트
     off, 정규화 on)를 쓴다 — `normalize=False`를 분모로 쓰면 다시 단위가
     어긋나 결함 주입 없이도 보존율이 낮아 보이는 거짓 양성이 나온다.
@@ -451,22 +503,48 @@ def test_t4_injection_over_normalization_kills_the_practice_effect():
     평균만이 아니라 분산까지 세션마다 맞추면, 과제 반응 크기(=연습 효과가
     만드는 신호 변화) 자체가 분모에 흡수돼 세션 간 크기 차이가 통째로
     사라진다. 측정 드리프트와 함께 진짜 학습도 지워진다.
+
+    **비대칭 주입이다** — `b_hat`(RECOVERY)에만 결함 정규화기를 쓰고 `b_ref`
+    (CLEAN)는 정상 `SessionBaseline`을 쓴다. 이 비대칭이 왜 현실적 결함까지
+    다 잡지 못하는지는 `test_t4_injection_symmetric_kill_is_caught_by_ref_floor`
+    참조 — 정규화 버그는 보통 코드 경로 하나이므로 양쪽에 다 걸린다.
     """
-
-    class _ZScoreBaseline(SessionBaseline):
-        @classmethod
-        def fit(cls, start_baseline, kind):
-            return _ZScoreBaseline(reference=np.asarray(start_baseline).mean(axis=0), kind=kind)
-
-        def apply(self, x):
-            arr = np.asarray(x, dtype=float)
-            sd = arr.std(axis=0)
-            sd[sd == 0] = 1.0
-            return (arr - arr.mean(axis=0)) / sd
-
     b_ref = _practice_slope(CLEAN, normalize=True)
     b_bad = _practice_slope(RECOVERY, normalize=True, normalizer=_ZScoreBaseline)
     assert abs(b_bad / b_ref) < T4_RATIO_MIN, (
         f"과한 정규화를 주입했는데도 보존율({b_bad / b_ref:.4f})이 유지됐다 — "
         f"b_ref={b_ref:.4f} b_bad={b_bad:.4f}. T4가 이 실패 양식을 못 잡는다"
     )
+
+
+@pytest.mark.slow
+def test_t4_injection_symmetric_kill_is_caught_by_ref_floor():
+    """결함 주입 2 (리뷰 2026-08-19 지적): 정규화 버그가 `b_ref`·`b_hat` 양쪽에
+    다 걸리면 비율 하나만으로는 못 잡는다.
+
+    위 비대칭 주입 테스트는 `b_hat`에만 결함 정규화기를 쓴다. 그런데 실제
+    정규화 버그는 코드 경로 하나이므로 `CLAUDE.md` §3.8이 규정한 "세션 단위
+    독립 정규화"가 양쪽 실행 모두에 적용된다 — `b_ref`도 같은 버그를 겪는다.
+
+    `b_ref`·`b_hat`을 **둘 다** `_ZScoreBaseline`으로 계산하면, 리뷰가 여러
+    시드로 재현한 대로 `b_ref` 자신이 살아있는 값(1.995~3.674)에서 죽은
+    값(0.0005~0.017, 200~7000배 작음)으로 무너진다. 이 상태에서 비율만
+    보면 seed 0(1.317)·seed 1(0.842) 모두 [0.5, 1.5] 안에 우연히 떨어져
+    **통과한다** — 잡음/잡음이 1 근처에 분포하기 때문이다. seed 42(-0.177)만
+    부호가 갈려 우연히 걸린다.
+
+    `T4_REF_SLOPE_MIN` 절대 하한이 이 경로를 실제로 막는지 확인한다:
+    `_assert_ratio_valid`가 비율을 보기 전에 `b_ref` 자신의 생존을 먼저
+    검사해야 한다.
+    """
+    b_ref_dead = _practice_slope(CLEAN, normalize=True, normalizer=_ZScoreBaseline)
+    b_hat_dead = _practice_slope(RECOVERY, normalize=True, normalizer=_ZScoreBaseline)
+
+    assert abs(b_ref_dead) < T4_REF_SLOPE_MIN, (
+        "가정이 깨졌다 — 양쪽을 다 죽였는데 b_ref가 여전히 하한(T4_REF_SLOPE_MIN) "
+        f"위에 있다. b_ref_dead={b_ref_dead:.6f}. 이 결함 주입은 T4_REF_SLOPE_MIN이 "
+        "막아야 할 실패 양식을 만들지 못한다."
+    )
+
+    with pytest.raises(AssertionError, match="비율을 계산할 근거가 없다"):
+        _assert_ratio_valid(b_ref_dead, b_hat_dead, context="[대칭 주입] ")

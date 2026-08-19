@@ -3,6 +3,15 @@
 # seed는 42로 그대로 둔다: 난수열 규율(스펙 §5.5) 덕분에 드리프트를 꺼도
 # 같은 난수열 위에서 돌므로 이 실행이 b_hat(session_recovery.yaml, on)의
 # 정당한 기준이 된다.
+#
+# preprocessing.baseline.normalize는 true다. tests/evaluation/
+# test_validation_session.py의 `_practice_slope`는 이 값을 읽지 않고
+# 호출자(T4 헬퍼)가 `normalize=True/False`를 파이썬 인자로 명시적으로
+# 넘긴다 — 그러나 config 자신의 선언값이 실제 쓰임(둘 다 정규화 on, §8.4.1
+# "정정 3" 참조)과 어긋나면 다음 사람이 "이 config는 정규화 off 기준"이라고
+# 오독한다(2026-08-19 리뷰 Important 2). 그래서 true로 맞춘다 — 이 config를
+# `run_experiment`로 직접 돌려도 T4가 실제로 비교하는 파이프라인(드리프트
+# off·정규화 on)과 같은 동작을 하도록.
 run_name: session_clean
 seed: 42
 
@@ -41,7 +50,7 @@ features:
 
 preprocessing:
   baseline:
-    normalize: false
+    normalize: true
     drift_threshold_relative: 0.20
     zero_atol: 1.0e-8
 
