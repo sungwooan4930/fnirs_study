@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 from scipy import stats
 
-from src.simulation.components.base import HBO_COUPLING, load_fraction
+from src.simulation.components.base import HBO_COUPLING
 
 HRF_DURATION_S = 32.0
 NOISE_SD = 0.15
@@ -43,7 +43,7 @@ def generate_fnirs(
     n_samples = int(round(timeline.duration_s * sfreq))
     t = np.arange(n_samples) / sfreq
 
-    neural = load_fraction(timeline.load_at(t))
+    neural = timeline.effective_load(t)
     hrf = canonical_hrf(sfreq)
 
     gain = 1.0 + subject.theta

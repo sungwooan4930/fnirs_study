@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from src.simulation.components.base import BEHAV_COUPLING, load_fraction
+from src.simulation.components.base import BEHAV_COUPLING
 
 BASE_ACCURACY = 0.95
 ACCURACY_DROP = 0.35   # 최대 부하에서 정답률이 이만큼 떨어진다
@@ -42,7 +42,7 @@ def generate_behavior(
 
     onsets = timeline.stim_onsets
     # 행동을 구동하는 것은 Δ만큼 앞선 시점의 상태다
-    driving_load = load_fraction(timeline.load_at(onsets - lead_delta_s))
+    driving_load = timeline.effective_load(onsets - lead_delta_s)
 
     gain = 1.0 + subject.theta
     scale = effect_size * BEHAV_COUPLING * gain * driving_load

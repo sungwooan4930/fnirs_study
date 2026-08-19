@@ -77,3 +77,44 @@ def test_reproducible_for_same_seed():
     _, a, _ = _make(0.8, seed=3)
     _, b, _ = _make(0.8, seed=3)
     assert np.array_equal(a, b)
+
+
+from src.simulation.components.fnirs_hrf import generate_fnirs
+from src.simulation.state import TASK, build_timeline
+from src.simulation.subject import SubjectProfile
+
+_TASK_CFG = {
+    "nback_levels": [0, 2, 3],
+    "block_duration_s": 30,
+    "baseline_duration_s": 20,
+    "n_blocks_per_level": 2,
+    "stim_interval_s": 2.0,
+}
+
+
+def _fnirs_task_mean(practice_gain: float) -> float:
+    """같은 시드로 fNIRS를 만들고 과제 구간 HbO 평균을 돌려준다."""
+    tl = build_timeline(
+        _TASK_CFG, np.random.default_rng(7), practice_gain=practice_gain
+    )
+    hbo, _ = generate_fnirs(
+        tl,
+        SubjectProfile(subject_id="sub-01", theta=0.0),
+        np.random.default_rng(11),
+        sfreq=10.4,
+        n_channels=4,
+        effect_size=1.0,
+        hbr_coupling=-0.33,
+    )
+    t = np.arange(hbo.shape[1]) / 10.4
+    task_mask = tl.kind_at(t) == TASK
+    return float(hbo[:, task_mask].mean())
+
+
+def test_practice_gain_reaches_the_fnirs_signal():
+    """연습 효과가 신호에 도달하지 않으면 T4는 원인 불명으로 실패한다."""
+    full = _fnirs_task_mean(1.0)
+    halved = _fnirs_task_mean(0.5)
+    assert full > 0.05, "기준 조건에서 과제 구간 HbO가 양수여야 비교가 성립한다"
+    # 잡음이 동일 시드로 같으므로 응답 성분만 절반이 된다
+    assert halved < full * 0.75
