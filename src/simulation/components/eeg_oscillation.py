@@ -13,7 +13,6 @@ from src.simulation.components.base import (
     ALPHA_COUPLING,
     N_MODULATED_EEG,
     THETA_COUPLING,
-    load_fraction,
     pink_noise,
 )
 
@@ -38,7 +37,7 @@ def generate_eeg_oscillation(
 
     signal = BACKGROUND_SCALE * pink_noise(n_samples, n_channels, rng)
 
-    load = load_fraction(timeline.load_at(t))
+    load = timeline.effective_load(t)
     # 개인차: theta가 클수록 같은 부하에 더 크게 반응한다
     gain = 1.0 + subject.theta
 

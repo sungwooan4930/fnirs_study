@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.simulation.components.base import N_MODULATED_EEG, load_fraction
+from src.simulation.components.base import N_MODULATED_EEG
 
 N200_LATENCY_S = 0.20
 P300_LATENCY_S = 0.30
@@ -43,7 +43,7 @@ def generate_eeg_erp(
     n200 = N200_AMPLITUDE * _gaussian(t_local, N200_LATENCY_S, N200_WIDTH_S)
     p300_shape = _gaussian(t_local, P300_LATENCY_S, P300_WIDTH_S)
 
-    loads = load_fraction(timeline.load_at(timeline.stim_onsets))
+    loads = timeline.effective_load(timeline.stim_onsets)
     gain = 1.0 + subject.theta
     n_mod = min(N_MODULATED_EEG, n_channels)
 

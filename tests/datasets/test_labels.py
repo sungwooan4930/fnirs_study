@@ -4,6 +4,7 @@ from src.common.seeding import set_all_seeds
 from src.datasets.labels import build_labels
 from src.datasets.windowing import make_windows
 from src.simulation.recording import generate_recording
+from src.simulation.session import SessionDriftParams, SessionPlan
 from src.simulation.subject import make_subjects
 
 SIM_CFG = {
@@ -14,6 +15,7 @@ SIM_CFG = {
     "task": {
         "nback_levels": [0, 2, 3],
         "block_duration_s": 30,
+        "baseline_duration_s": 20,
         "n_blocks_per_level": 2,
         "stim_interval_s": 2.0,
     },
@@ -23,10 +25,27 @@ SIM_CFG = {
 RT_BINS = [0.5, 0.8]
 
 
+def _neutral_plan(subject, sim_cfg):
+    """드리프트 없는 SessionPlan — 이 파일의 라벨 테스트는 신호 왜곡과 무관하다."""
+    n_eeg = int(sim_cfg["eeg"]["n_channels"])
+    n_fnirs = int(sim_cfg["fnirs"]["n_channels"])
+    drift = SessionDriftParams(
+        fnirs_gain=np.ones(n_fnirs),
+        fnirs_offset=np.zeros(n_fnirs),
+        eeg_gain=np.ones(n_eeg),
+        eeg_noise_scale=np.zeros(n_eeg),
+        within_rate=0.0,
+        between_big=False,
+        within_big=False,
+    )
+    return SessionPlan(subject=subject, session_idx=0, practice_gain=1.0, drift=drift)
+
+
 def _setup(lead_delta_s=1.2):
     rng = set_all_seeds(0)
     sub = make_subjects(1, 0.0, rng)[0]
-    rec = generate_recording(sub, SIM_CFG, rng)
+    plan = _neutral_plan(sub, SIM_CFG)
+    rec = generate_recording(plan, SIM_CFG, rng)
     win = make_windows(rec.timeline, 5.0, 1.0)
     labels, keep = build_labels(rec, win, lead_delta_s=lead_delta_s, rt_bins=RT_BINS)
     return rec, win, labels, keep
@@ -71,8 +90,14 @@ def test_keep_mask_drops_windows_without_a_lead_stimulus():
 
 
 def test_most_windows_are_kept_with_normal_delta():
-    _, _, _, keep = _setup(lead_delta_s=1.2)
-    assert keep.mean() > 0.9
+    # 분모를 TASK 창으로 한정한다 — 베이스라인 창은 Task 8부터 기본적으로
+    # 항상 배제되므로(약 창의 17%), 전체 창 대비 비율로 재면 baseline
+    # 배제 자체가 "너무 많이 버렸다"는 오탐을 만든다. 이 테스트의 원래
+    # 의도인 "선행 자극 경계 효과로 버려지는 창이 적다"는 자격이 있는
+    # (TASK) 창에서만 성립하면 충분하다.
+    _, win, _, keep = _setup(lead_delta_s=1.2)
+    task_keep = keep[win.block_kind == TASK]
+    assert task_keep.mean() > 0.9
 
 
 def test_lead_target_comes_after_window_end():
@@ -101,12 +126,15 @@ def test_lead_target_selects_correct_stimulus():
 
 
 def test_keep_mask_exact_boundaries():
-    """keep 마스크가 정확히 선행 자극이 존재하는 창만 True인지 검증."""
+    """keep 마스크가 정확히 선행 자극이 존재하는 TASK 창만 True인지 검증."""
     rec, win, _, keep = _setup(lead_delta_s=1.2)
     onsets = rec.behavior.onsets
 
-    # 독립적으로 계산한 유효 마스크
-    expected_keep = np.searchsorted(onsets, win.end_s + 1.2, side="left") < len(onsets)
+    # 독립적으로 계산한 유효 마스크. Task 8부터 build_labels는 선행
+    # 자극 유무와 별개로 베이스라인 창을 기본 배제하므로(§6.5), 그
+    # 조건도 여기서 함께 재현해야 build_labels의 실제 계약과 일치한다.
+    has_lead_stimulus = np.searchsorted(onsets, win.end_s + 1.2, side="left") < len(onsets)
+    expected_keep = has_lead_stimulus & (win.block_kind == TASK)
 
     assert np.array_equal(keep, expected_keep)
 
@@ -131,3 +159,63 @@ def test_response_latency_bin_mapping():
     assert np.digitize(0.4, bins=RT_BINS) == 0
     assert np.digitize(0.65, bins=RT_BINS) == 1
     assert np.digitize(0.9, bins=RT_BINS) == 2
+
+
+from src.datasets.labels import build_labels
+from src.datasets.windowing import make_windows
+from src.simulation.recording import generate_dataset
+from src.simulation.state import BASELINE, BASELINE_LOAD_SENTINEL, TASK
+
+_SIM = {
+    "n_subjects": 1,
+    "n_sessions": 1,
+    "subject_variance": 0.0,
+    "effect_size": 0.8,
+    "lead_delta_s": 1.2,
+    "task": {
+        "nback_levels": [0, 2, 3],
+        "block_duration_s": 30,
+        "baseline_duration_s": 20,
+        "n_blocks_per_level": 2,
+        "stim_interval_s": 2.0,
+    },
+    "practice": {"rate": 0.15},
+    "drift": {
+        "fnirs_gain_sigma": 0.2, "fnirs_offset_sigma": 0.1,
+        "eeg_gain_sigma": 0.15, "eeg_noise_sigma": 0.15,
+        "within_session_rate": 0.3, "within_session_fraction": 0.33,
+        "between_session_scale": 4.0, "assignment": "sampled",
+    },
+    "eeg": {"n_channels": 4, "sfreq_hz": 250},
+    "fnirs": {"n_channels": 4, "sfreq_hz": 10.4, "hbr_coupling": -0.33},
+}
+
+
+def _rec_and_windows():
+    rec = generate_dataset(_SIM, np.random.default_rng(0))[0]
+    win = make_windows(rec.timeline, window_s=5.0, step_s=1.0)
+    return rec, win
+
+
+def test_baseline_windows_are_excluded_by_default():
+    rec, win = _rec_and_windows()
+    _, keep = build_labels(rec, win, lead_delta_s=1.2, rt_bins=[0.5, 0.8])
+    assert (win.block_kind[keep] == TASK).all()
+    assert (win.block_kind == BASELINE).any(), "이 설정에서 베이스라인 창이 있어야 시험이 성립한다"
+
+
+def test_sentinel_label_never_survives_the_default_path():
+    """센티넬이 살아남으면 chance level이 3클래스가 아니게 된다."""
+    rec, win = _rec_and_windows()
+    labels, keep = build_labels(rec, win, lead_delta_s=1.2, rt_bins=[0.5, 0.8])
+    assert (labels["cognitive_load"][keep] != BASELINE_LOAD_SENTINEL).all()
+
+
+def test_include_baseline_opt_in_keeps_them():
+    rec, win = _rec_and_windows()
+    _, keep_off = build_labels(rec, win, lead_delta_s=1.2, rt_bins=[0.5, 0.8])
+    _, keep_on = build_labels(
+        rec, win, lead_delta_s=1.2, rt_bins=[0.5, 0.8], include_baseline=True
+    )
+    assert int(keep_on.sum()) > int(keep_off.sum())
+    assert (win.block_kind[keep_on] == BASELINE).any()

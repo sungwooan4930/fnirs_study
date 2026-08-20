@@ -3,15 +3,28 @@ seed: 42
 
 simulation:
   n_subjects: 6
+  n_sessions: 2
   subject_variance: 0.5
   effect_size: 0.8
   lead_delta_s: 1.2
   task:
     nback_levels: [0, 2, 3]
     block_duration_s: 30
+    baseline_duration_s: 20
     n_blocks_per_level: 2
     stim_interval_s: 2.0
-  # 주의: EEG 샘플링 속도 250 Hz는 개발 속도 최적화. 정규 1000 Hz 파일럿 config는 Task 19에서 추가.
+  practice:
+    rate: 0.15
+  drift:
+    fnirs_gain_sigma: 0.20
+    fnirs_offset_sigma: 0.10
+    eeg_gain_sigma: 0.15
+    eeg_noise_sigma: 0.15
+    within_session_rate: 0.30
+    within_session_fraction: 0.33
+    between_session_scale: 4.0
+    assignment: sampled
+  # 주의: EEG 샘플링 속도 250 Hz는 개발 속도 최적화. 정규 1000 Hz는 pilot.yaml.
   eeg:   {n_channels: 30, sfreq_hz: 250}
   fnirs: {n_channels: 48, sfreq_hz: 10.4, hbr_coupling: -0.33}
 
@@ -22,11 +35,18 @@ windowing:
 features:
   extractor: minimal
 
+preprocessing:
+  baseline:
+    normalize: true
+    drift_threshold_relative: 2.15
+    zero_atol: 1.0e-8
+
 dataset:
   targets: [cognitive_load]
   lead_targets: [accuracy, response_latency]
   modalities: [eeg, fnirs, behavior]
   rt_bins: [0.5, 0.8]
+  include_baseline: false
 
 evaluation:
   splitter: loso
@@ -34,6 +54,8 @@ evaluation:
   guards:
     check_subject_overlap: true
     check_window_overlap: true
+    check_session_overlap: true
+    check_normalization_source: true
 
 output:
   results_dir: results

@@ -4,6 +4,8 @@ from src.common.seeding import set_all_seeds
 from src.datasets.features_minimal import extract_features
 from src.datasets.windowing import make_windows
 from src.simulation.recording import generate_recording
+from src.simulation.session import SessionDriftParams, SessionPlan
+from src.simulation.state import TASK
 from src.simulation.subject import make_subjects
 
 SIM_CFG = {
@@ -14,6 +16,7 @@ SIM_CFG = {
     "task": {
         "nback_levels": [0, 2, 3],
         "block_duration_s": 30,
+        "baseline_duration_s": 20,
         "n_blocks_per_level": 2,
         "stim_interval_s": 2.0,
     },
@@ -22,11 +25,28 @@ SIM_CFG = {
 }
 
 
+def _neutral_plan(subject, sim_cfg):
+    """드리프트 없는 SessionPlan — 이 파일의 특징 추출 테스트는 신호 왜곡과 무관하다."""
+    n_eeg = int(sim_cfg["eeg"]["n_channels"])
+    n_fnirs = int(sim_cfg["fnirs"]["n_channels"])
+    drift = SessionDriftParams(
+        fnirs_gain=np.ones(n_fnirs),
+        fnirs_offset=np.zeros(n_fnirs),
+        eeg_gain=np.ones(n_eeg),
+        eeg_noise_scale=np.zeros(n_eeg),
+        within_rate=0.0,
+        between_big=False,
+        within_big=False,
+    )
+    return SessionPlan(subject=subject, session_idx=0, practice_gain=1.0, drift=drift)
+
+
 def _setup(effect_size=0.8):
     cfg = {**SIM_CFG, "effect_size": effect_size}
     rng = set_all_seeds(0)
     sub = make_subjects(1, 0.0, rng)[0]
-    rec = generate_recording(sub, cfg, rng)
+    plan = _neutral_plan(sub, cfg)
+    rec = generate_recording(plan, cfg, rng)
     win = make_windows(rec.timeline, 5.0, 1.0)
     return rec, win, extract_features(rec, win)
 
@@ -84,6 +104,7 @@ def test_behavior_features_zero_when_no_stimulus_in_window():
 
     rec = SyntheticRecording(
         subject_id="test",
+        session_idx=0,
         eeg=np.zeros((30, 1250)),  # 5 seconds at 250 Hz
         eeg_sfreq=250,
         hbo=np.zeros((48, 52)),  # 5 seconds at 10.4 Hz
@@ -98,6 +119,7 @@ def test_behavior_features_zero_when_no_stimulus_in_window():
         end_s=np.array([5.0]),
         trial_id=np.array([0]),
         load_level=np.array([0]),
+        block_kind=np.array([TASK]),
     )
 
     feats = extract_features(rec, win)
@@ -128,6 +150,7 @@ def test_fnirs_hbo_slope_matches_linear_ramp():
 
     rec = SyntheticRecording(
         subject_id="test",
+        session_idx=0,
         eeg=np.zeros((30, 1250)),  # 5 seconds at 250 Hz
         eeg_sfreq=250,
         hbo=hbo,
@@ -142,6 +165,7 @@ def test_fnirs_hbo_slope_matches_linear_ramp():
         end_s=np.array([5.0]),
         trial_id=np.array([0]),
         load_level=np.array([0]),
+        block_kind=np.array([TASK]),
     )
 
     feats = extract_features(rec, win)

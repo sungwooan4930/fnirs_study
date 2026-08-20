@@ -9,6 +9,7 @@ from src.simulation.subject import make_subjects
 TASK_CFG = {
     "nback_levels": [0, 2, 3],
     "block_duration_s": 30,
+    "baseline_duration_s": 20,
     "n_blocks_per_level": 2,
     "stim_interval_s": 2.0,
 }
@@ -32,7 +33,9 @@ def _mean_erp_at_p300(tl, sig, level):
 
 def test_output_shape():
     _, sig = _make(0.8)
-    assert sig.shape == (30, int(round(180.0 * SFREQ)))
+    # 세션 총 길이 = 시작·종료 베이스라인(20초*2) + 과제 블록(3*2*30=180초)
+    total_duration_s = 2 * TASK_CFG["baseline_duration_s"] + 180.0
+    assert sig.shape == (30, int(round(total_duration_s * SFREQ)))
 
 
 def test_no_nans():

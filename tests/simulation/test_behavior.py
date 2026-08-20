@@ -9,6 +9,7 @@ from src.simulation.subject import make_subjects
 TASK_CFG = {
     "nback_levels": [0, 2, 3],
     "block_duration_s": 30,
+    "baseline_duration_s": 20,
     "n_blocks_per_level": 2,
     "stim_interval_s": 2.0,
 }
@@ -71,8 +72,13 @@ def test_rejects_negative_lead_delta():
         _make(0.8, lead_delta_s=-1.0)
 
 
-class _LoadAtSpy:
-    """generate_behavior가 load_at에 실제로 넘기는 시각을 기록한다."""
+class _EffectiveLoadSpy:
+    """generate_behavior가 effective_load에 실제로 넘기는 시각을 기록한다.
+
+    Task 3에서 generate_behavior의 배선이 load_at에서 effective_load로
+    바뀌었다 (practice_gain·베이스라인 클립을 실효 부하가 함께 지므로).
+    스파이 대상도 함께 바뀌어야 이 테스트가 실제 배선을 검증한다.
+    """
 
     def __init__(self, timeline):
         self._tl = timeline
@@ -81,18 +87,18 @@ class _LoadAtSpy:
     def __getattr__(self, name):
         return getattr(self._tl, name)
 
-    def load_at(self, t):
+    def effective_load(self, t):
         self.queries.append(np.asarray(t).copy())
-        return self._tl.load_at(t)
+        return self._tl.effective_load(t)
 
 
 def test_load_at_called_with_onset_minus_lead_delta():
-    """generate_behavior는 정확히 onset - lead_delta_s를 load_at에 전달해야 한다."""
+    """generate_behavior는 정확히 onset - lead_delta_s를 effective_load에 전달해야 한다."""
     rng = set_all_seeds(0)
     tl = build_timeline(TASK_CFG, rng)
     sub = make_subjects(1, 0.0, rng)[0]
 
-    spy = _LoadAtSpy(tl)
+    spy = _EffectiveLoadSpy(tl)
     lead_delta_s = 1.2
     generate_behavior(spy, sub, rng, effect_size=0.8, lead_delta_s=lead_delta_s)
 
@@ -117,6 +123,7 @@ def test_accuracy_drops_with_lagged_load_short_blocks():
     short_block_cfg = {
         "nback_levels": [0, 2, 3],
         "block_duration_s": 3.0,      # 짧은 블록
+        "baseline_duration_s": 5.0,
         "n_blocks_per_level": 4,      # 더 많은 블록 → 더 많은 경계 전환
         "stim_interval_s": 0.5,       # 자극 더 촘촘히
     }
@@ -137,3 +144,35 @@ def test_accuracy_drops_with_lagged_load_short_blocks():
     assert acc_high < acc_low, \
         f"With short blocks and correct sign, accuracy should drop at high load. " \
         f"Got acc_low={acc_low:.3f}, acc_high={acc_high:.3f}"
+
+
+from src.simulation.components.behavior import generate_behavior
+from src.simulation.state import build_timeline
+from src.simulation.subject import SubjectProfile
+
+_TASK_CFG_B = {
+    "nback_levels": [0, 2, 3],
+    "block_duration_s": 30,
+    "baseline_duration_s": 20,
+    "n_blocks_per_level": 2,
+    "stim_interval_s": 2.0,
+}
+
+
+def _mean_rt(practice_gain: float) -> float:
+    tl = build_timeline(
+        _TASK_CFG_B, np.random.default_rng(7), practice_gain=practice_gain
+    )
+    log = generate_behavior(
+        tl,
+        SubjectProfile(subject_id="sub-01", theta=0.0),
+        np.random.default_rng(11),
+        effect_size=1.0,
+        lead_delta_s=1.2,
+    )
+    return float(log.rt.mean())
+
+
+def test_practice_gain_reaches_behavior():
+    """연습하면 같은 n-back에서도 반응시간이 줄어야 한다."""
+    assert _mean_rt(0.5) < _mean_rt(1.0)
